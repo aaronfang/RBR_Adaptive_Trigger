@@ -123,7 +123,7 @@ class ServerResponse:
         return cls(data["Status"], data["TimeReceived"], data["isControllerConnected"], data["BatteryLevel"])
 
 UDP_IP = "127.0.0.1"
-UDP_PORT = 6776
+UDP_PORT = 6778
 UDP_DSX_PORT = 6969
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -149,16 +149,15 @@ while True:
     RBBrakeDiskTemp = int(round(struct.unpack_from("<f", var , offset=572)[0] - 273.15))
     EngineRpm = int(round(struct.unpack_from("<f", var , offset=136)[0]))
 
-    
     print(chr(27) + "[2J") # clear screen using escape sequences
     print(chr(27) + "[H")  # return to home using escape sequences
 
+    # Adjust these factors to change vibration intensity (0.0 to 1.0)
+    throttle_factor = 0.5
+    brake_factor = 0.5
 
-    # Calculate vibration intensity based on throttle for left trigger
-    left_vibration_intensity = int((ControlThrottle / 100) * 255)
-    
-    # Calculate vibration intensity based on brake for right trigger
-    right_vibration_intensity = int((ControlBrake / 100) * 255)
+    left_vibration_intensity = int((ControlThrottle / 100) * 255 * throttle_factor)
+    right_vibration_intensity = int((ControlBrake / 100) * 255 * brake_factor)
     
     packet = Packet([
         Instruction(InstructionType.TriggerUpdate, [0, int(Trigger.Left.value), int(TriggerMode.VibrateTrigger.value), left_vibration_intensity]),
@@ -166,14 +165,6 @@ while True:
     ])
     json_str = json.dumps(packet.to_dict())
     sock_dsx.sendto(bytes(json_str, "utf-8"), (UDP_IP, UDP_DSX_PORT))
-
-    # if(EngineRpm > 1000):
-    #     packet = Packet([
-    #         Instruction(InstructionType.TriggerUpdate, [0, int(Trigger.Left.value), int(TriggerMode.Soft.value)]),
-    #         Instruction(InstructionType.TriggerUpdate, [0, int(Trigger.Right.value), int(TriggerMode.Soft.value)])
-    #     ])
-    #     json_str = json.dumps(packet.to_dict())
-    #     sock_dsx.sendto(bytes(json_str, "utf-8"), (UDP_IP, UDP_DSX_PORT))
         
     print("Total Steps: %s	Race Time: %s:%s" %(TotalSteps, RaceHr , RaceMin))
     print("Engine: %s RPM   Gear: %s   Throttle: %s   Brake: %s   Clutch: %s" %(EngineRpm , ControlGear, ControlThrottle , ControlBrake, ControlClutch))
