@@ -5,6 +5,7 @@ from enum import Enum
 from ctypes import *
 import serial
 import time
+import os
 
 # Define trigger modes
 class TriggerMode(Enum):
@@ -302,6 +303,17 @@ def interpolate_color(start_color, end_color, factor):
     return [int(start + (end - start) * factor) for start, end in zip(start_color, end_color)]
 
 
+dir_path = os.path.dirname(os.path.realpath(__file__)) + "\\haptics\\"
+
+# Define RPM thresholds for haptic feedback
+RPM_IDLE = 1000
+RPM_LOW = 3000
+RPM_MEDIUM = 5000
+RPM_HIGH = 7000
+
+# Initialize previous RPM
+previous_rpm = 0
+
 while True: 
     # # Read data from COM port
     # line = read_serial_data(ser)
@@ -415,6 +427,19 @@ while True:
         Instruction(InstructionType.TriggerUpdate, [0, Trigger.Left.value, TriggerMode.CustomTriggerValue.value, CustomTriggerValueMode.OFF.value, 0,left_intensity]),
         Instruction(InstructionType.TriggerUpdate, [0, Trigger.Right.value, TriggerMode.CustomTriggerValue.value, CustomTriggerValueMode.OFF.value, 0,right_intensity])
     ])
+
+    # Add haptic feedback based on RPM
+    if engine_rpm > RPM_HIGH and previous_rpm <= RPM_HIGH:
+        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble.wav", 0, 1, 1, 1]))
+    elif RPM_MEDIUM < engine_rpm <= RPM_HIGH and (previous_rpm <= RPM_MEDIUM or previous_rpm > RPM_HIGH):
+        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble.wav", 0, 0.5, 0.5, 1]))
+    elif RPM_LOW < engine_rpm <= RPM_MEDIUM and (previous_rpm <= RPM_LOW or previous_rpm > RPM_MEDIUM):
+        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble.wav", 0, 0.2, 0.2, 1]))
+    elif RPM_IDLE < engine_rpm <= RPM_LOW and (previous_rpm <= RPM_IDLE or previous_rpm > RPM_LOW):
+        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble.wav", 0, 0.1, 0.1, 1]))
+
+    # Update previous RPM
+    previous_rpm = engine_rpm
 
     # Add RGB update instruction based on RPM
     if rpm_percentage < RPM_GREEN_THRESHOLD:
