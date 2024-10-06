@@ -3,7 +3,10 @@ import struct
 import json
 from enum import Enum
 from ctypes import *
+import serial
+import time
 
+# Define trigger modes
 class TriggerMode(Enum):
     Normal = 0
     GameCube = 1
@@ -123,6 +126,7 @@ class ServerResponse:
     def from_dict(cls, data):
         return cls(data["Status"], data["TimeReceived"], data["isControllerConnected"], data["BatteryLevel"])
 
+# Define telemetry data structure
 class TireSegment(Structure):
     _fields_ = [
         ("temperature", c_float),
@@ -243,15 +247,78 @@ class TelemetryData(Structure):
         ("car", Car)
     ]
 
+# Define UDP port
 UDP_IP = "127.0.0.1"
 UDP_PORT = 6778
 UDP_DSX_PORT = 6969
 
+# Create UDP socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((UDP_IP, UDP_PORT))
 sock_dsx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
+# # serial port setup
+# def open_serial_port():
+#     while True:
+#         try:
+#             ser = serial.Serial('COM6', 115200, timeout=1, 
+#                                 bytesize=serial.EIGHTBITS,
+#                                 parity=serial.PARITY_NONE,
+#                                 stopbits=serial.STOPBITS_ONE)
+#             print(f"Serial port opened successfully: {ser}")
+#             return ser
+#         except serial.SerialException as e:
+#             print(f"Failed to open serial port: {e}")
+#             print("Retrying in 5 seconds...")
+#             time.sleep(5)
+
+# ser = open_serial_port()
+
+# def read_serial_data(ser):
+#     try:
+#         # Clear input buffer
+#         ser.reset_input_buffer()
+        
+#         # Read data with a timeout
+#         line = ser.readline().decode('utf-8').strip()
+        
+#         if line:
+#             print(f"Raw data received: {line}")
+#             return line
+#         else:
+#             print("No data received within timeout period")
+#             return None
+#     except serial.SerialException as e:
+#         print(f"Serial port error: {e}")
+#         return None
+
+# Define RPM threshold variables
+RPM_GREEN_THRESHOLD = 50  # Below this percentage, color is green
+RPM_RED_THRESHOLD = 80    # Below this percentage, color transitions from yellow to red. Above RPM_RED_THRESHOLD, color is fully red
+RPM_YELLOW_THRESHOLD = (RPM_GREEN_THRESHOLD + RPM_RED_THRESHOLD) / 2  # Below this percentage, color transitions from green to yellow
+
+
+def interpolate_color(start_color, end_color, factor):
+    return [int(start + (end - start) * factor) for start, end in zip(start_color, end_color)]
+
+
 while True: 
+    # # Read data from COM port
+    # line = read_serial_data(ser)
+    
+    # if line:
+    #     try:
+    #         telemetry_simhub = json.loads(line)
+    #     except json.JSONDecodeError as e:
+    #         print(f"Error decoding JSON data: {e}")
+    #         continue
+    # else:
+    #     print("No valid data available on serial port")
+    #     continue 
+
+    # customSerialDeviceData = telemetry_simhub
+
+
     data, address = sock.recvfrom(664)  # buffer size is 664 bytes
     telemetry = TelemetryData.from_buffer_copy(data)
 
@@ -260,7 +327,7 @@ while True:
 
     # Stage data
     stage_index = telemetry.stage.index
-    stage_progress = round(telemetry.stage.progress * 100, 2)
+    stage_progress = round(telemetry.stage.progress * 0.01, 2)
     race_time = telemetry.stage.raceTime
     race_hr = int(race_time / 3600)
     race_min = int((race_time % 3600) / 60)
@@ -269,7 +336,7 @@ while True:
     distance_to_end = round(telemetry.stage.distanceToEnd, 2)
 
     # Control data
-    steering = round(telemetry.control.steering, 2)
+    steering = round(telemetry.control.steering, 4)
     throttle = round(telemetry.control.throttle * 100)
     brake = round(telemetry.control.brake * 100)
     handbrake = round(telemetry.control.handbrake * 100)
@@ -280,7 +347,7 @@ while True:
 
     # Car data
     car_index = telemetry.car.index
-    car_speed = round(telemetry.car.speed * 3.6, 2)  # Convert to km/h
+    car_speed = round(telemetry.car.speed, 2)  # km/h
     position_x = round(telemetry.car.positionX, 2)
     position_y = round(telemetry.car.positionY, 2)
     position_z = round(telemetry.car.positionZ, 2)
@@ -294,6 +361,8 @@ while True:
 
     # Engine data
     engine_rpm = round(telemetry.car.engine.rpm)
+    max_rpm = 8000  # Assuming max RPM is 8000, adjust if needed
+    rpm_percentage = (engine_rpm / max_rpm) * 100
     radiator_coolant_temp = round(telemetry.car.engine.radiatorCoolantTemperature - 273.15, 1)
     engine_coolant_temp = round(telemetry.car.engine.engineCoolantTemperature - 273.15, 1)
     engine_temp = round(telemetry.car.engine.engineTemperature - 273.15, 1)
@@ -335,26 +404,49 @@ while True:
 
 
     # Adjust these factors to change vibration intensity (0.0 to 1.0)
-    throttle_factor = 0.5
-    brake_factor = 0.5
+    throttle_factor = 1
+    brake_factor = 1
     
-    left_vibration_intensity = int((throttle / 100) * 255 * throttle_factor)
-    right_vibration_intensity = int((brake / 100) * 255 * brake_factor)
-    
-    
+    # Use the throttle and brake to adjust your trigger effects
+    left_intensity = int(brake * 2.55 * throttle_factor)  # Scale to 0-255
+    right_intensity = int(throttle * 2.55 * brake_factor)
+
     packet = Packet([
-        Instruction(InstructionType.TriggerUpdate, [0, int(Trigger.Left.value), int(TriggerMode.VibrateTrigger.value), left_vibration_intensity]),
-        Instruction(InstructionType.TriggerUpdate, [0, int(Trigger.Right.value), int(TriggerMode.VibrateTrigger.value), right_vibration_intensity])
+        Instruction(InstructionType.TriggerUpdate, [0, Trigger.Left.value, TriggerMode.CustomTriggerValue.value, CustomTriggerValueMode.OFF.value, 0,left_intensity]),
+        Instruction(InstructionType.TriggerUpdate, [0, Trigger.Right.value, TriggerMode.CustomTriggerValue.value, CustomTriggerValueMode.OFF.value, 0,right_intensity])
     ])
+
+    # Add RGB update instruction based on RPM
+    if rpm_percentage < RPM_GREEN_THRESHOLD:
+        color = [0, 255, 0]  # Green
+    elif rpm_percentage < RPM_YELLOW_THRESHOLD:
+        # Interpolate between green and yellow
+        factor = (rpm_percentage - RPM_GREEN_THRESHOLD) / (RPM_YELLOW_THRESHOLD - RPM_GREEN_THRESHOLD)
+        color = interpolate_color([0, 255, 0], [255, 255, 0], factor)
+    elif rpm_percentage < RPM_RED_THRESHOLD:
+        # Interpolate between yellow and red
+        factor = (rpm_percentage - RPM_YELLOW_THRESHOLD) / (RPM_RED_THRESHOLD - RPM_YELLOW_THRESHOLD)
+        color = interpolate_color([255, 255, 0], [255, 0, 0], factor)
+    else:
+        color = [255, 0, 0]  # Full red
+
+    packet.instructions.append(Instruction(InstructionType.RGBUpdate, [0] + color))
+
+    # Send the packet to DualSense X
     json_str = json.dumps(packet.to_dict())
     sock_dsx.sendto(bytes(json_str, "utf-8"), (UDP_IP, UDP_DSX_PORT))
 
 
     # Print all telemetry data
+
+    # print(f"Custom Serial Device Data: {customSerialDeviceData}")
+
+    print(f"Left Trigger: {left_intensity}, Right Trigger: {right_intensity}")
+
     print(f"Total Steps: {total_steps}")
     print(f"\nStage Data:")
     print(f"Index: {stage_index}, Progress: {stage_progress}%, Race Time: {race_hr:02d}:{race_min:02d}:{race_sec:02d}")
-    print(f"Drive Line Location: {drive_line_location}, Distance to End: {distance_to_end} m")
+    print(f"Drive Line Location: {drive_line_location} m, Distance to End: {distance_to_end} m")
 
     print(f"\nControl Data:")
     print(f"Steering: {steering}, Throttle: {throttle}%, Brake: {brake}%, Handbrake: {handbrake}%")
@@ -370,21 +462,20 @@ while True:
     print(f"Accelerations: Surge={accelerations.surge:.2f}, Sway={accelerations.sway:.2f}, Heave={accelerations.heave:.2f}, Roll={accelerations.roll:.2f}, Pitch={accelerations.pitch:.2f}, Yaw={accelerations.yaw:.2f}")
 
     print(f"\nEngine Data:")
-    print(f"RPM: {engine_rpm}, Radiator Coolant Temp: {radiator_coolant_temp}°C")
+    print(f"RPM: {engine_rpm} ({rpm_percentage:.1f}%), Radiator Coolant Temp: {radiator_coolant_temp}°C")
     print(f"Engine Coolant Temp: {engine_coolant_temp}°C, Engine Temp: {engine_temp}°C")
+    print(f"Controller LED Color: RGB{tuple(color)}")
 
-    for i, susp in enumerate(['LF', 'RF', 'LB', 'RB']):
-        print(f"\nSuspension {susp}:")
-        sd = suspension_data[i]
-        print(f"Spring Deflection: {sd['spring_deflection']} m, Rollbar Force: {sd['rollbar_force']} N")
-        print(f"Spring Force: {sd['spring_force']} N, Damper Force: {sd['damper_force']} N")
-        print(f"Strut Force: {sd['strut_force']} N, Helper Spring Active: {sd['helper_spring_active']}")
-        print(f"Damper Damage: {sd['damper_damage']}, Damper Piston Velocity: {sd['damper_piston_velocity']} m/s")
-        print(f"Brake Disk: Layer Temp={sd['brake_disk_layer_temp']}°C, Temp={sd['brake_disk_temp']}°C, Wear={sd['brake_disk_wear']}")
-        print(f"Tire: Pressure={sd['tire_pressure']} bar, Temp={sd['tire_temp']}°C")
-        print(f"Tire Carcass Temp: {sd['tire_carcass_temp']}°C, Tread Temp: {sd['tire_tread_temp']}°C")
-        print(f"Current Segment: {sd['tire_current_segment']}")
-        for j, seg in enumerate(sd['tire_segments']):
-            print(f"  Segment {j+1}: Temp={seg['temp']}°C, Wear={seg['wear']}")
-
-    # ... existing code for packet sending ...
+    # for i, susp in enumerate(['LF', 'RF', 'LB', 'RB']):
+    #     print(f"\nSuspension {susp}:")
+    #     sd = suspension_data[i]
+    #     print(f"Spring Deflection: {sd['spring_deflection']} m, Rollbar Force: {sd['rollbar_force']} N")
+    #     print(f"Spring Force: {sd['spring_force']} N, Damper Force: {sd['damper_force']} N")
+    #     print(f"Strut Force: {sd['strut_force']} N, Helper Spring Active: {sd['helper_spring_active']}")
+    #     print(f"Damper Damage: {sd['damper_damage']}, Damper Piston Velocity: {sd['damper_piston_velocity']} m/s")
+    #     print(f"Brake Disk: Layer Temp={sd['brake_disk_layer_temp']}°C, Temp={sd['brake_disk_temp']}°C, Wear={sd['brake_disk_wear']}")
+    #     print(f"Tire: Pressure={sd['tire_pressure']} bar, Temp={sd['tire_temp']}°C")
+    #     print(f"Tire Carcass Temp: {sd['tire_carcass_temp']}°C, Tread Temp: {sd['tire_tread_temp']}°C")
+    #     print(f"Current Segment: {sd['tire_current_segment']}")
+    #     for j, seg in enumerate(sd['tire_segments']):
+    #         print(f"  Segment {j+1}: Temp={seg['temp']}°C, Wear={seg['wear']}")
