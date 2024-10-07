@@ -308,8 +308,8 @@ dir_path = os.path.dirname(os.path.realpath(__file__)) + "\\haptics\\"
 # Define RPM thresholds for haptic feedback
 RPM_IDLE = 1000
 RPM_LOW = 3000
-RPM_MEDIUM = 5000
-RPM_HIGH = 7000
+RPM_MEDIUM = 4500
+RPM_HIGH = 6000
 
 # Initialize previous RPM and last rumble time
 previous_rpm = 0
@@ -344,7 +344,7 @@ while True:
 
     # customSerialDeviceData = telemetry_simhub
 
-
+    current_time = time.time()
     data, address = sock.recvfrom(664)  # buffer size is 664 bytes
     telemetry = TelemetryData.from_buffer_copy(data)
 
@@ -425,41 +425,51 @@ while True:
             ]
         })
 
-    print(chr(27) + "[2J")  # clear screen using escape sequences
-    print(chr(27) + "[H")   # return to home using escape sequences
 
+    ###################################################################################
+    # Adaptive Trigger
+    ###################################################################################
 
     # Adjust these factors to change vibration intensity (0.0 to 1.0)
-    throttle_factor = 1
-    brake_factor = 1
+    throttle_factor = 0.001
+    brake_factor = 100/255
     
-    # Use the throttle and brake to adjust your trigger effects
-    left_intensity = int(brake * 2.55 * throttle_factor)  # Scale to 0-255
-    right_intensity = int(throttle * 2.55 * brake_factor)
+    # Adjust left trigger based on brake pressure and car speed
+    if car_speed > 10:
+        if brake > 70:
+            left_intensity = int(brake * 2.55 * brake_factor)
+            left_mode = TriggerMode.VibrateTrigger.value
+        else:
+            left_intensity = int(brake * 2.55 * brake_factor)  # Scale to 0-255
+            left_mode = CustomTriggerValueMode.OFF.value
+    else:
+        left_intensity = int(brake * 2.55 * brake_factor)  # Scale to 0-255
+        left_mode = CustomTriggerValueMode.OFF.value
+
+    # Adjust right trigger based on throttle, car speed, and RPM
+    if car_speed > 100:
+        if throttle > 80:
+            right_intensity = int(throttle * 2.55 * throttle_factor)
+            right_mode = TriggerMode.VibrateTrigger.value
+        else:
+            right_intensity = int(throttle * 2.55 * throttle_factor)
+            right_mode = CustomTriggerValueMode.OFF.value
+    else:
+        # if engine_rpm >= (RPM_HIGH) & throttle > 80:
+        #     right_intensity = int(throttle * 2.55 * throttle_factor)
+        #     right_mode = TriggerMode.VibrateTrigger.value
+        # else:
+        right_intensity = int(throttle * 2.55 * throttle_factor)
+        right_mode = CustomTriggerValueMode.OFF.value
 
     packet = Packet([
-        Instruction(InstructionType.TriggerUpdate, [0, Trigger.Left.value, TriggerMode.CustomTriggerValue.value, CustomTriggerValueMode.OFF.value, 0,left_intensity]),
-        Instruction(InstructionType.TriggerUpdate, [0, Trigger.Right.value, TriggerMode.CustomTriggerValue.value, CustomTriggerValueMode.OFF.value, 0,right_intensity])
+        Instruction(InstructionType.TriggerUpdate, [0, Trigger.Left.value, left_mode, left_intensity, 0, 0]),
+        Instruction(InstructionType.TriggerUpdate, [0, Trigger.Right.value, right_mode, right_intensity, 0, 0])
     ])
 
-    current_time = time.time()
-
-    # Continuous rumble effect based on RPM
-    if engine_rpm > RPM_IDLE:
-        if current_time - last_rumble_time >= RUMBLE_INTERVAL:
-            last_rumble_time = current_time
-            
-            if engine_rpm > RPM_HIGH:
-                intensity = 1.0
-            elif engine_rpm > RPM_MEDIUM:
-                intensity = 0.75
-            elif engine_rpm > RPM_LOW:
-                intensity = 0.5
-            else:
-                intensity = 0.25
-            
-            packet.instructions.append(Instruction(InstructionType.HapticFeedback, 
-                [0, dir_path + "rumble2.wav", 0, intensity, intensity, RUMBLE_INTERVAL]))
+    ###################################################################################
+    # LED Light
+    ###################################################################################
 
     # Add RGB update instruction based on RPM
     if rpm_percentage < RPM_GREEN_THRESHOLD:
@@ -477,9 +487,11 @@ while True:
 
     packet.instructions.append(Instruction(InstructionType.RGBUpdate, [0] + color))
 
-    # # Jump detection
-    # current_time = time.time()
+    ###################################################################################
+    # Haptic Feedback
+    ###################################################################################
 
+    # # Jump Landing
     # # Check for landing condition
     # if (accelerations.heave < LANDING_THRESHOLD and 
     #     current_time - LAST_LANDING_TIME > LANDING_COOLDOWN):
@@ -493,21 +505,40 @@ while True:
     #     landing_messages.append(message)
     #     print(message)
 
-    # # Gear change detection and haptic feedback
-    # if gear != previous_gear and previous_gear is not None:
-    #     # Gear has changed, trigger haptic feedback
-    #     packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "shift.wav", 0, 1, 1, 1]))
-    #     # print(f"Gear change detected: {previous_gear} -> {gear}")
 
-    # # Update previous gear
-    # previous_gear = gear
+    # RPM
+    if engine_rpm > RPM_IDLE:
+        if current_time - last_rumble_time >= RUMBLE_INTERVAL:
+            last_rumble_time = current_time
+            if engine_rpm > RPM_HIGH:
+                intensity = 1.0
+            elif engine_rpm > RPM_MEDIUM:
+                intensity = 0.75
+            elif engine_rpm > RPM_LOW:
+                intensity = 0.5
+            else:
+                intensity = 0.25
+            
+            packet.instructions.append(Instruction(InstructionType.HapticFeedback, 
+                [0, dir_path + "rumble2.wav", 0, intensity, intensity, RUMBLE_INTERVAL]))
+
+    # Gear change
+    if gear != previous_gear and previous_gear is not None:
+        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "shift.wav", 0, 1, 1, 1]))
+    # Update previous gear
+    previous_gear = gear
 
     # Send the packet to DualSense X
     json_str = json.dumps(packet.to_dict())
     sock_dsx.sendto(bytes(json_str, "utf-8"), (UDP_IP, UDP_DSX_PORT))
 
+    ###################################################################################
+    # Print Telemetry Data
+    ###################################################################################
 
     # Print all telemetry data
+    print(chr(27) + "[2J")  # clear screen using escape sequences
+    print(chr(27) + "[H")   # return to home using escape sequences
 
     # print(f"Custom Serial Device Data: {customSerialDeviceData}")
 
