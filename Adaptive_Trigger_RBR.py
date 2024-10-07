@@ -314,6 +314,18 @@ RPM_HIGH = 7000
 # Initialize previous RPM
 previous_rpm = 0
 
+# Add these constants near the top of your file
+LANDING_THRESHOLD = -5.0 # Adjust this value based on testing
+LAST_LANDING_TIME = 0
+LANDING_COOLDOWN = 0.5  # Cooldown in seconds to prevent multiple triggers
+
+# Initialize previous gear
+previous_gear = None
+
+# Add these variables near the top of your file
+landing_count = 0
+landing_messages = []
+
 while True: 
     # # Read data from COM port
     # line = read_serial_data(ser)
@@ -428,15 +440,20 @@ while True:
         Instruction(InstructionType.TriggerUpdate, [0, Trigger.Right.value, TriggerMode.CustomTriggerValue.value, CustomTriggerValueMode.OFF.value, 0,right_intensity])
     ])
 
+    # # Continuous base rumble effect
+    # if engine_rpm > RPM_IDLE:
+    #     base_intensity = min(0.5, (engine_rpm - RPM_IDLE) / (RPM_HIGH - RPM_IDLE))
+    #     packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble.wav", 0, base_intensity, base_intensity, 0.1]))
+
     # Add haptic feedback based on RPM
     if engine_rpm > RPM_HIGH and previous_rpm <= RPM_HIGH:
-        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble.wav", 0, 1, 1, 1]))
+        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble2.wav", 0, 1, 1, 0.5]))
     elif RPM_MEDIUM < engine_rpm <= RPM_HIGH and (previous_rpm <= RPM_MEDIUM or previous_rpm > RPM_HIGH):
-        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble.wav", 0, 0.5, 0.5, 1]))
+        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble2.wav", 0, 0.5, 0.5, 1]))
     elif RPM_LOW < engine_rpm <= RPM_MEDIUM and (previous_rpm <= RPM_LOW or previous_rpm > RPM_MEDIUM):
-        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble.wav", 0, 0.2, 0.2, 1]))
+        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble2.wav", 0, 0.2, 0.2, 1]))
     elif RPM_IDLE < engine_rpm <= RPM_LOW and (previous_rpm <= RPM_IDLE or previous_rpm > RPM_LOW):
-        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble.wav", 0, 0.1, 0.1, 1]))
+        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble2.wav", 0, 0.1, 0.1, 1]))
 
     # Update previous RPM
     previous_rpm = engine_rpm
@@ -457,6 +474,31 @@ while True:
 
     packet.instructions.append(Instruction(InstructionType.RGBUpdate, [0] + color))
 
+    # # Jump detection
+    # current_time = time.time()
+
+    # # Check for landing condition
+    # if (accelerations.heave < LANDING_THRESHOLD and 
+    #     current_time - LAST_LANDING_TIME > LANDING_COOLDOWN):
+    #     # Landing detected
+    #     LAST_LANDING_TIME = current_time
+    #     landing_count += 1
+    #     # Add haptic feedback for landing
+    #     packet.instructions.append(Instruction(InstructionType.HapticFeedback, 
+    #         [0, dir_path + "landing.wav", 0, 1, 1, 1]))
+    #     message = f"Landing detected! Haptic feedback triggered. (Count: {landing_count})"
+    #     landing_messages.append(message)
+    #     print(message)
+
+    # # Gear change detection and haptic feedback
+    # if gear != previous_gear and previous_gear is not None:
+    #     # Gear has changed, trigger haptic feedback
+    #     packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "shift.wav", 0, 1, 1, 1]))
+    #     # print(f"Gear change detected: {previous_gear} -> {gear}")
+
+    # # Update previous gear
+    # previous_gear = gear
+
     # Send the packet to DualSense X
     json_str = json.dumps(packet.to_dict())
     sock_dsx.sendto(bytes(json_str, "utf-8"), (UDP_IP, UDP_DSX_PORT))
@@ -467,6 +509,13 @@ while True:
     # print(f"Custom Serial Device Data: {customSerialDeviceData}")
 
     print(f"Left Trigger: {left_intensity}, Right Trigger: {right_intensity}")
+
+    # Print landing messages
+    print("Landing Events:")
+    for msg in landing_messages[-5:]:  # Show last 5 landing events
+        print(msg)
+    print(f"Total landings: {landing_count}")
+    print("\n")  # Add a blank line for separation
 
     print(f"Total Steps: {total_steps}")
     print(f"\nStage Data:")
@@ -485,6 +534,7 @@ while True:
     print(f"\nMotion Data:")
     print(f"Velocities: Surge={velocities.surge:.2f}, Sway={velocities.sway:.2f}, Heave={velocities.heave:.2f}, Roll={velocities.roll:.2f}, Pitch={velocities.pitch:.2f}, Yaw={velocities.yaw:.2f}")
     print(f"Accelerations: Surge={accelerations.surge:.2f}, Sway={accelerations.sway:.2f}, Heave={accelerations.heave:.2f}, Roll={accelerations.roll:.2f}, Pitch={accelerations.pitch:.2f}, Yaw={accelerations.yaw:.2f}")
+    print(f"Vertical Acceleration (Heave): {accelerations.heave:.2f}")  # Add this line
 
     print(f"\nEngine Data:")
     print(f"RPM: {engine_rpm} ({rpm_percentage:.1f}%), Radiator Coolant Temp: {radiator_coolant_temp}°C")
