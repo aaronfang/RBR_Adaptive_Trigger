@@ -311,8 +311,10 @@ RPM_LOW = 3000
 RPM_MEDIUM = 5000
 RPM_HIGH = 7000
 
-# Initialize previous RPM
+# Initialize previous RPM and last rumble time
 previous_rpm = 0
+last_rumble_time = 0
+RUMBLE_INTERVAL = 0.5  # Interval in seconds for rumble effect
 
 # Add these constants near the top of your file
 LANDING_THRESHOLD = -5.0 # Adjust this value based on testing
@@ -440,23 +442,24 @@ while True:
         Instruction(InstructionType.TriggerUpdate, [0, Trigger.Right.value, TriggerMode.CustomTriggerValue.value, CustomTriggerValueMode.OFF.value, 0,right_intensity])
     ])
 
-    # # Continuous base rumble effect
-    # if engine_rpm > RPM_IDLE:
-    #     base_intensity = min(0.5, (engine_rpm - RPM_IDLE) / (RPM_HIGH - RPM_IDLE))
-    #     packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble.wav", 0, base_intensity, base_intensity, 0.1]))
+    current_time = time.time()
 
-    # Add haptic feedback based on RPM
-    if engine_rpm > RPM_HIGH and previous_rpm <= RPM_HIGH:
-        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble2.wav", 0, 1, 1, 0.5]))
-    elif RPM_MEDIUM < engine_rpm <= RPM_HIGH and (previous_rpm <= RPM_MEDIUM or previous_rpm > RPM_HIGH):
-        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble2.wav", 0, 0.5, 0.5, 1]))
-    elif RPM_LOW < engine_rpm <= RPM_MEDIUM and (previous_rpm <= RPM_LOW or previous_rpm > RPM_MEDIUM):
-        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble2.wav", 0, 0.2, 0.2, 1]))
-    elif RPM_IDLE < engine_rpm <= RPM_LOW and (previous_rpm <= RPM_IDLE or previous_rpm > RPM_LOW):
-        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "rumble2.wav", 0, 0.1, 0.1, 1]))
-
-    # Update previous RPM
-    previous_rpm = engine_rpm
+    # Continuous rumble effect based on RPM
+    if engine_rpm > RPM_IDLE:
+        if current_time - last_rumble_time >= RUMBLE_INTERVAL:
+            last_rumble_time = current_time
+            
+            if engine_rpm > RPM_HIGH:
+                intensity = 1.0
+            elif engine_rpm > RPM_MEDIUM:
+                intensity = 0.75
+            elif engine_rpm > RPM_LOW:
+                intensity = 0.5
+            else:
+                intensity = 0.25
+            
+            packet.instructions.append(Instruction(InstructionType.HapticFeedback, 
+                [0, dir_path + "rumble2.wav", 0, intensity, intensity, RUMBLE_INTERVAL]))
 
     # Add RGB update instruction based on RPM
     if rpm_percentage < RPM_GREEN_THRESHOLD:
