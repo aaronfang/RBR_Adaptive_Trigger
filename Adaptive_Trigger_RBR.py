@@ -6,6 +6,7 @@ from ctypes import *
 import serial
 import time
 import os
+import sys
 
 # Define trigger modes
 class TriggerMode(Enum):
@@ -303,7 +304,13 @@ def interpolate_color(start_color, end_color, factor):
     return [int(start + (end - start) * factor) for start, end in zip(start_color, end_color)]
 
 
-dir_path = os.path.dirname(os.path.realpath(__file__)) + "\\haptics\\"
+# dir_path = os.path.dirname(os.path.realpath(__file__)) + "\\haptics\\"
+if getattr(sys, 'frozen', False):
+    # 如果是打包后的可执行文件
+    dir_path = os.path.join(sys._MEIPASS, "haptics")
+else:
+    # 如果是正常运行的脚本
+    dir_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "haptics")
 
 # Define RPM thresholds for haptic feedback
 RPM_IDLE = 1000
@@ -429,42 +436,28 @@ while True:
     ###################################################################################
     # Adaptive Trigger
     ###################################################################################
-
-    # Adjust these factors to change vibration intensity (0.0 to 1.0)
-    throttle_factor = 0.001
-    brake_factor = 100/255
     
-    # Adjust left trigger based on brake pressure and car speed
+    # Adjust left trigger based on brake and car speed
     if car_speed > 10:
         if brake > 70:
-            left_intensity = int(brake * 2.55 * brake_factor)
-            left_mode = TriggerMode.VibrateTrigger.value
+            left_mode = TriggerMode.Normal.value#TriggerMode.VibrateTriggerPulse.value
         else:
-            left_intensity = int(brake * 2.55 * brake_factor)  # Scale to 0-255
-            left_mode = CustomTriggerValueMode.OFF.value
+            left_mode = TriggerMode.Normal.value
     else:
-        left_intensity = int(brake * 2.55 * brake_factor)  # Scale to 0-255
-        left_mode = CustomTriggerValueMode.OFF.value
+        left_mode = TriggerMode.Normal.value
 
-    # Adjust right trigger based on throttle, car speed, and RPM
+    # Adjust right trigger based on throttle, car speed
     if car_speed > 100:
         if throttle > 80:
-            right_intensity = int(throttle * 2.55 * throttle_factor)
-            right_mode = TriggerMode.VibrateTrigger.value
+            right_mode = TriggerMode.Normal.value#TriggerMode.VibrateTriggerPulse.value
         else:
-            right_intensity = int(throttle * 2.55 * throttle_factor)
-            right_mode = CustomTriggerValueMode.OFF.value
+            right_mode = TriggerMode.Normal.value
     else:
-        # if engine_rpm >= (RPM_HIGH) & throttle > 80:
-        #     right_intensity = int(throttle * 2.55 * throttle_factor)
-        #     right_mode = TriggerMode.VibrateTrigger.value
-        # else:
-        right_intensity = int(throttle * 2.55 * throttle_factor)
-        right_mode = CustomTriggerValueMode.OFF.value
+        right_mode = TriggerMode.Normal.value
 
     packet = Packet([
-        Instruction(InstructionType.TriggerUpdate, [0, Trigger.Left.value, left_mode, left_intensity, 0, 0]),
-        Instruction(InstructionType.TriggerUpdate, [0, Trigger.Right.value, right_mode, right_intensity, 0, 0])
+        Instruction(InstructionType.TriggerUpdate, [0, Trigger.Left.value, left_mode, 1, 0, 0]),
+        Instruction(InstructionType.TriggerUpdate, [0, Trigger.Right.value, right_mode, 1, 0, 0])
     ])
 
     ###################################################################################
@@ -519,12 +512,25 @@ while True:
             else:
                 intensity = 0.25
             
-            packet.instructions.append(Instruction(InstructionType.HapticFeedback, 
-                [0, dir_path + "rumble2.wav", 0, intensity, intensity, RUMBLE_INTERVAL]))
+            packet.instructions.append(Instruction(InstructionType.HapticFeedback, [
+                0, # controller index
+                os.path.join(dir_path, "rumble_mid.wav"), # path to wav
+                intensity, # left volume
+                intensity, # right volume
+                1, # clear buffer flag
+                1 # channel number
+            ])) 
 
     # Gear change
     if gear != previous_gear and previous_gear is not None:
-        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [0, dir_path + "shift.wav", 0, 1, 1, 1]))
+        packet.instructions.append(Instruction(InstructionType.HapticFeedback, [
+            0, # controller index
+            os.path.join(dir_path, "shift_high.wav"), # path to wav
+            1, # left volume
+            1, # right volume
+            1, # clear buffer flag
+            2 # channel number
+        ])) 
     # Update previous gear
     previous_gear = gear
 
@@ -537,43 +543,43 @@ while True:
     ###################################################################################
 
     # Print all telemetry data
-    print(chr(27) + "[2J")  # clear screen using escape sequences
-    print(chr(27) + "[H")   # return to home using escape sequences
+    # print(chr(27) + "[2J")  # clear screen using escape sequences
+    # print(chr(27) + "[H")   # return to home using escape sequences
 
-    # print(f"Custom Serial Device Data: {customSerialDeviceData}")
+    # # print(f"Custom Serial Device Data: {customSerialDeviceData}")
 
-    print(f"Left Trigger: {left_intensity}, Right Trigger: {right_intensity}")
+    # print(f"Left Trigger: {left_intensity}, Right Trigger: {right_intensity}")
 
-    # Print landing messages
-    print("Landing Events:")
-    for msg in landing_messages[-5:]:  # Show last 5 landing events
-        print(msg)
-    print(f"Total landings: {landing_count}")
-    print("\n")  # Add a blank line for separation
+    # # Print landing messages
+    # print("Landing Events:")
+    # for msg in landing_messages[-5:]:  # Show last 5 landing events
+    #     print(msg)
+    # print(f"Total landings: {landing_count}")
+    # print("\n")  # Add a blank line for separation
 
-    print(f"Total Steps: {total_steps}")
-    print(f"\nStage Data:")
-    print(f"Index: {stage_index}, Progress: {stage_progress}%, Race Time: {race_hr:02d}:{race_min:02d}:{race_sec:02d}")
-    print(f"Drive Line Location: {drive_line_location} m, Distance to End: {distance_to_end} m")
+    # print(f"Total Steps: {total_steps}")
+    # print(f"\nStage Data:")
+    # print(f"Index: {stage_index}, Progress: {stage_progress}%, Race Time: {race_hr:02d}:{race_min:02d}:{race_sec:02d}")
+    # print(f"Drive Line Location: {drive_line_location} m, Distance to End: {distance_to_end} m")
 
-    print(f"\nControl Data:")
-    print(f"Steering: {steering}, Throttle: {throttle}%, Brake: {brake}%, Handbrake: {handbrake}%")
-    print(f"Clutch: {clutch}%, Gear: {gear}, Footbrake Pressure: {footbrake_pressure}, Handbrake Pressure: {handbrake_pressure}")
+    # print(f"\nControl Data:")
+    # print(f"Steering: {steering}, Throttle: {throttle}%, Brake: {brake}%, Handbrake: {handbrake}%")
+    # print(f"Clutch: {clutch}%, Gear: {gear}, Footbrake Pressure: {footbrake_pressure}, Handbrake Pressure: {handbrake_pressure}")
 
-    print(f"\nCar Data:")
-    print(f"Index: {car_index}, Speed: {car_speed} km/h")
-    print(f"Position: X={position_x}, Y={position_y}, Z={position_z}")
-    print(f"Orientation: Roll={car_roll}, Pitch={car_pitch}, Yaw={car_yaw}")
+    # print(f"\nCar Data:")
+    # print(f"Index: {car_index}, Speed: {car_speed} km/h")
+    # print(f"Position: X={position_x}, Y={position_y}, Z={position_z}")
+    # print(f"Orientation: Roll={car_roll}, Pitch={car_pitch}, Yaw={car_yaw}")
 
-    print(f"\nMotion Data:")
-    print(f"Velocities: Surge={velocities.surge:.2f}, Sway={velocities.sway:.2f}, Heave={velocities.heave:.2f}, Roll={velocities.roll:.2f}, Pitch={velocities.pitch:.2f}, Yaw={velocities.yaw:.2f}")
-    print(f"Accelerations: Surge={accelerations.surge:.2f}, Sway={accelerations.sway:.2f}, Heave={accelerations.heave:.2f}, Roll={accelerations.roll:.2f}, Pitch={accelerations.pitch:.2f}, Yaw={accelerations.yaw:.2f}")
-    print(f"Vertical Acceleration (Heave): {accelerations.heave:.2f}")  # Add this line
+    # print(f"\nMotion Data:")
+    # print(f"Velocities: Surge={velocities.surge:.2f}, Sway={velocities.sway:.2f}, Heave={velocities.heave:.2f}, Roll={velocities.roll:.2f}, Pitch={velocities.pitch:.2f}, Yaw={velocities.yaw:.2f}")
+    # print(f"Accelerations: Surge={accelerations.surge:.2f}, Sway={accelerations.sway:.2f}, Heave={accelerations.heave:.2f}, Roll={accelerations.roll:.2f}, Pitch={accelerations.pitch:.2f}, Yaw={accelerations.yaw:.2f}")
+    # print(f"Vertical Acceleration (Heave): {accelerations.heave:.2f}")  # Add this line
 
-    print(f"\nEngine Data:")
-    print(f"RPM: {engine_rpm} ({rpm_percentage:.1f}%), Radiator Coolant Temp: {radiator_coolant_temp}°C")
-    print(f"Engine Coolant Temp: {engine_coolant_temp}°C, Engine Temp: {engine_temp}°C")
-    print(f"Controller LED Color: RGB{tuple(color)}")
+    # print(f"\nEngine Data:")
+    # print(f"RPM: {engine_rpm} ({rpm_percentage:.1f}%), Radiator Coolant Temp: {radiator_coolant_temp}°C")
+    # print(f"Engine Coolant Temp: {engine_coolant_temp}°C, Engine Temp: {engine_temp}°C")
+    # print(f"Controller LED Color: RGB{tuple(color)}")
 
     # for i, susp in enumerate(['LF', 'RF', 'LB', 'RB']):
     #     print(f"\nSuspension {susp}:")
