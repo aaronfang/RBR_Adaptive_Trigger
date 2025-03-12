@@ -26,7 +26,7 @@ A Python application that provides DualSense (PS5) controller feedback for Richa
 - Python 3.8 or higher
 - Richard Burns Rally SSE
 - DualSense (PS5) controller
-- DSX (DualSense Windows Extended) running
+- You need to connect your PS5 DualSense Joystick with DualSenseY-v2 to work: https://github.com/WujekFoliarz/DualSenseY-v2
 
 ## Installation
 
