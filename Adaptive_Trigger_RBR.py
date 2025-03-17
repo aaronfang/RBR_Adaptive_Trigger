@@ -1992,10 +1992,10 @@ else:
     }
     # 添加新的配置部分：反馈强度设置
     config['Feedback'] = {
-        'trigger_strength': '1.0',      # 自适应扳机强度系数 (0.1-2.0)
-        'haptic_strength': '1.0',       # Haptic震动反馈强度系数 (0-1.0)
+        'trigger_strength': '1.5',      # 自适应扳机强度系数 (0.1-2.0)
+        'haptic_strength': '0.5',       # Haptic震动反馈强度系数 (0-1.0)
         'wheel_slip_threshold': '10.0',  # 轮胎侧滑检测的灵敏度。值越小，越容易检测到侧滑。 (1.0-20.0)
-        'trigger_threshold': '1.0'      # 触发Haptic震动的侧滑阈值 (1.0-20.0)
+        'trigger_threshold': '10.0'      # 触发Haptic震动的侧滑阈值 (1.0-20.0)
     }
     # 添加GUI设置
     config['GUI'] = {
@@ -2026,10 +2026,10 @@ else:
         
         # Write Feedback section with detailed comments
         configfile.write("[Feedback]\n")
-        configfile.write("trigger_strength = 1.0\n")
-        configfile.write("haptic_strength = 1.0\n")
+        configfile.write("trigger_strength = 1.5\n")
+        configfile.write("haptic_strength = 0.5\n")
         configfile.write("wheel_slip_threshold = 10.0\n")
-        configfile.write("trigger_threshold = 1.0\n")
+        configfile.write("trigger_threshold = 10.0\n")
         configfile.write("\n")
         
         # Write GUI section with comments
@@ -2387,9 +2387,15 @@ while True:
                             
                             # Apply vibration if spin exceeds trigger threshold
                             if max_spin > trigger_threshold:
-                                # Calculate base intensity and apply haptic strength multiplier
-                                base_intensity = min(1.0, (max_spin - trigger_threshold) / 50)
-                                throttle_vibration = min(1.0, base_intensity * haptic_strength)
+                                # Calculate the intensity based on the maximum slip or lock
+                                max_slip_intensity = max(
+                                    min(1.0, (max_spin - trigger_threshold) / 50),
+                                    min(1.0, (max_spin - trigger_threshold) / 50)
+                                )
+                                # Apply the user's haptic strength setting
+                                final_intensity = max_slip_intensity * haptic_strength
+                                
+                                throttle_vibration = min(1.0, final_intensity)
                         
                         # Calculate brake vibration based on wheel lock
                         if brake > 30:
@@ -2403,9 +2409,15 @@ while True:
                             
                             # Apply vibration if lock exceeds trigger threshold
                             if max_lock > trigger_threshold:
-                                # Calculate base intensity and apply haptic strength multiplier
-                                base_intensity = min(1.0, (max_lock - trigger_threshold) / 50)
-                                brake_vibration = min(1.0, base_intensity * haptic_strength)
+                                # Calculate the intensity based on the maximum slip or lock
+                                max_slip_intensity = max(
+                                    min(1.0, (max_lock - trigger_threshold) / 50),
+                                    min(1.0, (max_lock - trigger_threshold) / 50)
+                                )
+                                # Apply the user's haptic strength setting
+                                final_intensity = max_slip_intensity * haptic_strength
+                                
+                                brake_vibration = min(1.0, final_intensity)
                     
                     # Update dashboard with all telemetry data
                     dashboard.update_values({
@@ -2605,6 +2617,14 @@ while True:
                 
                 # Determine if we have significant traction loss
                 if max_spin > trigger_threshold or max_lock > trigger_threshold:
+                    # Calculate the intensity based on the maximum slip or lock
+                    max_slip_intensity = max(
+                        min(1.0, (max_spin - trigger_threshold) / 50),
+                        min(1.0, (max_lock - trigger_threshold) / 50)
+                    )
+                    # Apply the user's haptic strength setting
+                    final_intensity = max_slip_intensity * haptic_strength
+                    
                     # Start wheel slip rumble if not already active
                     if not wheel_slip_rumble_active:
                         packet.instructions.append(Instruction(InstructionType.HapticFeedback, [
@@ -2612,9 +2632,9 @@ while True:
                         ]))
                         wheel_slip_rumble_active = True
                     
-                    # Use the configured haptic strength directly
+                    # Use the calculated intensity
                     packet.instructions.append(Instruction(InstructionType.EditAudio, [
-                        os.path.join(haptics_path, "rumble_mid_4c.wav"), AudioEditType.Volume, haptic_strength
+                        os.path.join(haptics_path, "rumble_mid_4c.wav"), AudioEditType.Volume, final_intensity
                     ]))
                     
                     # Add extra rumble effect for severe slip conditions
