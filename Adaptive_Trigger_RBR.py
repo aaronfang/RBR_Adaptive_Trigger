@@ -17,6 +17,17 @@ import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
+# 尝试导入 Windows 特定的模块，如果不可用则提供替代方案
+try:
+    import win32gui
+    import win32con
+    import win32api
+    WINDOWS_API_AVAILABLE = True
+except ImportError:
+    print("警告: PyWin32 库未安装，游戏内覆盖层功能将不可用。")
+    print("请使用 'pip install pywin32' 安装所需库。")
+    WINDOWS_API_AVAILABLE = False
+
 # Define memory reading functions
 def get_process_by_name(name):
     for proc in psutil.process_iter(['pid', 'name']):
@@ -466,18 +477,248 @@ RPM_RED_THRESHOLD = 95    # Below this percentage, LED transitions from yellow t
 
 # Helper function for color interpolation
 def interpolate_color(color1, color2, factor):
-    """Interpolate between two RGB colors"""
-    r = int(color1[0] + (color2[0] - color1[0]) * factor)
-    g = int(color1[1] + (color2[1] - color1[1]) * factor)
-    b = int(color1[2] + (color2[2] - color1[2]) * factor)
-    return r, g, b
+    """在两种颜色之间进行线性插值"""
+    r1, g1, b1 = color1
+    r2, g2, b2 = color2
+    r = r1 + (r2 - r1) * factor
+    g = g1 + (g2 - g1) * factor
+    b = b1 + (b2 - b1) * factor
+    return (int(r), int(g), int(b))
+
+class TelemetryOverlay:
+    """游戏画面上的遥测数据覆盖层"""
+    def __init__(self):
+        self.window = None
+        self.canvas = None
+        self.visible = False
+        self.telemetry_data = {}
+        self.font_size = 14
+        self.text_color = "#00FF00"  # 绿色文字
+        self.bg_color = "#000000"  # 黑色背景
+        self.bg_opacity = 70  # 背景透明度 (0-255)，增加一点不透明度
+        self.position = "top-right"  # 位置: top-left, top-right, bottom-left, bottom-right
+        self.padding = 10
+        # 调整窗口大小，只适合显示水温信息
+        self.width = 200
+        self.height = 30
+        # 保存自定义位置
+        self.custom_x = None
+        self.custom_y = None
+        # 位置是否已更改标志
+        self.position_changed = False
+        # 保存配置的回调函数
+        self.save_callback = None
+        
+    def create_window(self):
+        """创建覆盖窗口"""
+        if self.window:
+            return
+            
+        # 创建一个无边框窗口
+        self.window = tk.Toplevel()
+        self.window.overrideredirect(True)  # 移除标题栏和边框
+        self.window.attributes('-topmost', True)  # 保持在最上层
+        self.window.attributes('-alpha', 0.7)  # 设置整体透明度为0.7，使其更适合游戏内显示
+        self.window.attributes('-transparentcolor', '')  # 设置透明色
+        
+        # 设置窗口样式为工具窗口，这样它不会出现在任务栏中
+        if WINDOWS_API_AVAILABLE:
+            try:
+                hwnd = win32gui.GetParent(self.window.winfo_id())
+                style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+                style = style | win32con.WS_EX_TOOLWINDOW | win32con.WS_EX_LAYERED
+                win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, style)
+            except Exception as e:
+                print(f"设置窗口样式时出错: {e}")
+        
+        # 创建画布
+        self.canvas = tk.Canvas(self.window, bg=self.bg_color, highlightthickness=0)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        
+        # 设置初始大小和位置
+        self.update_position()
+        
+        # 绑定鼠标事件，允许拖动窗口
+        self.canvas.bind("<ButtonPress-1>", self.start_move)
+        self.canvas.bind("<ButtonRelease-1>", self.stop_move)
+        self.canvas.bind("<B1-Motion>", self.do_move)
+        
+        self.moving = False
+        self.x = 0
+        self.y = 0
+        
+    def start_move(self, event):
+        """开始拖动窗口"""
+        self.moving = True
+        self.x = event.x
+        self.y = event.y
+        
+    def stop_move(self, event):
+        """停止拖动窗口"""
+        self.moving = False
+        # 如果位置已更改，通知主窗口保存配置
+        if self.position_changed and hasattr(self, 'save_callback') and self.save_callback:
+            self.save_callback()
+    
+    def do_move(self, event):
+        """拖动窗口"""
+        if self.moving:
+            x = self.window.winfo_x() + (event.x - self.x)
+            y = self.window.winfo_y() + (event.y - self.y)
+            self.window.geometry(f"+{x}+{y}")
+            # 保存自定义位置
+            self.custom_x = x
+            self.custom_y = y
+            # 通知需要保存配置
+            self.position_changed = True
+    
+    def update_position(self):
+        """更新窗口位置"""
+        screen_width = self.window.winfo_screenwidth()
+        screen_height = self.window.winfo_screenheight()
+        
+        # 如果有自定义位置，优先使用
+        if self.custom_x is not None and self.custom_y is not None:
+            x, y = self.custom_x, self.custom_y
+        # 否则使用预设位置
+        elif self.position == "top-left":
+            x, y = self.padding, self.padding
+        elif self.position == "top-right":
+            x, y = screen_width - self.width - self.padding, self.padding
+        elif self.position == "bottom-left":
+            x, y = self.padding, screen_height - self.height - self.padding
+        elif self.position == "bottom-right":
+            x, y = screen_width - self.width - self.padding, screen_height - self.height - self.padding
+        else:  # 默认右上角
+            x, y = screen_width - self.width - self.padding, self.padding
+            
+        self.window.geometry(f"{self.width}x{self.height}+{x}+{y}")
+    
+    def show(self):
+        """显示覆盖窗口"""
+        if not self.window:
+            self.create_window()
+        self.window.deiconify()
+        self.visible = True
+        
+    def hide(self):
+        """隐藏覆盖窗口"""
+        if self.window:
+            self.window.withdraw()
+        self.visible = False
+        
+    def toggle_visibility(self):
+        """切换可见性"""
+        if self.visible:
+            self.hide()
+        else:
+            self.show()
+            
+    def update_data(self, data):
+        """更新遥测数据并重绘"""
+        if not self.visible or not self.window:
+            return
+            
+        self.telemetry_data = data
+        self.redraw()
+        
+    def redraw(self):
+        """重绘覆盖窗口内容"""
+        if not self.visible or not self.window:
+            return
+            
+        self.canvas.delete("all")
+        
+        # 绘制半透明背景
+        self.canvas.create_rectangle(0, 0, self.width, self.height, fill=self.bg_color, outline="")
+        
+        # 如果没有数据，显示等待消息
+        if not self.telemetry_data:
+            self.canvas.create_text(
+                self.width // 2, 
+                self.height // 2, 
+                text="等待数据...", 
+                fill=self.text_color,
+                font=("Arial", self.font_size)
+            )
+            return
+            
+        # 只显示水温
+        if 'water_temp' in self.telemetry_data:
+            water_temp = self.telemetry_data['water_temp']
+            # 根据温度改变颜色
+            temp_color = self.text_color
+            if water_temp > 105:  # 过热
+                temp_color = "#FF0000"  # 红色
+            elif water_temp > 95:  # 偏高
+                temp_color = "#FFFF00"  # 黄色
+                
+            temp_text = f"WaterTemp: {water_temp:.1f} °C"
+            self.canvas.create_text(
+                self.width // 2, 
+                self.height // 2, 
+                text=temp_text, 
+                fill=temp_color,
+                font=("Arial", self.font_size)
+            )
+    
+    def destroy(self):
+        """销毁覆盖窗口"""
+        if self.window:
+            self.window.destroy()
+            self.window = None
+            self.canvas = None
+            self.visible = False
+    
+    def load_position(self, config):
+        """从配置加载位置"""
+        if 'UI' in config and 'overlay_x' in config['UI'] and 'overlay_y' in config['UI']:
+            try:
+                self.custom_x = int(config['UI']['overlay_x'])
+                self.custom_y = int(config['UI']['overlay_y'])
+                print(f"已加载悬浮窗位置: x={self.custom_x}, y={self.custom_y}")
+            except (ValueError, TypeError):
+                self.custom_x = None
+                self.custom_y = None
+                print("悬浮窗位置格式错误，使用默认位置")
+        else:
+            self.custom_x = None
+            self.custom_y = None
+            
+    def save_position(self, config):
+        """保存位置到配置"""
+        if self.position_changed and self.custom_x is not None and self.custom_y is not None:
+            if 'UI' not in config:
+                config['UI'] = {}
+            config['UI']['overlay_x'] = str(self.custom_x)
+            config['UI']['overlay_y'] = str(self.custom_y)
+            self.position_changed = False
+            return True
+        return False
 
 # Create a class for the telemetry dashboard
 class TelemetryDashboard:
     def __init__(self, root):
         self.root = root
         self.root.title("RBR Telemetry Dashboard")
-        self.root.geometry("700x460")
+        self.root.geometry("830x460")
+        
+        # 初始化游戏内覆盖层
+        if WINDOWS_API_AVAILABLE:
+            self.overlay = TelemetryOverlay()
+            # 从配置加载悬浮窗位置
+            self.overlay.load_position(config)
+            # 设置保存配置的回调函数
+            self.overlay.save_callback = self.save_config
+            
+            # 根据配置决定是否显示悬浮窗
+            self.show_overlay = tk.BooleanVar(value=config.getboolean('UI', 'show_overlay', fallback=False))
+            if self.show_overlay.get():
+                self.overlay.show()
+        else:
+            self.overlay = None
+            self.show_overlay = tk.BooleanVar(value=False)
+            print("游戏内覆盖层功能不可用，因为 PyWin32 库未安装。")
         
         # 设置窗口图标和任务栏图标
         try:
@@ -717,6 +958,21 @@ class TelemetryDashboard:
         )
         title_bar_cb.pack(side=tk.LEFT, padx=5)
         
+        # 游戏内覆盖层切换按钮
+        overlay_cb = ttk.Checkbutton(
+            self.control_panel,
+            text="游戏内显示",
+            variable=self.show_overlay,
+            command=self.toggle_overlay,
+            style='Theme.TCheckbutton'
+        )
+        overlay_cb.pack(side=tk.LEFT, padx=5)
+        
+        # 如果 PyWin32 不可用，禁用覆盖层切换按钮
+        if not WINDOWS_API_AVAILABLE:
+            overlay_cb.configure(state='disabled')
+            self.show_overlay.set(False)
+        
         # 主题切换按钮
         theme_cb = ttk.Checkbutton(
             self.control_panel,
@@ -946,6 +1202,16 @@ class TelemetryDashboard:
     def save_config(self):
         """保存配置到文件"""
         try:
+            # 保存覆盖层设置
+            if hasattr(self, 'show_overlay') and WINDOWS_API_AVAILABLE:
+                if 'UI' not in config:
+                    config['UI'] = {}
+                config['UI']['show_overlay'] = str(self.show_overlay.get())
+                
+                # 保存悬浮窗位置
+                if hasattr(self, 'overlay') and self.overlay is not None:
+                    self.overlay.save_position(config)
+                
             with open(config_path, 'w', encoding='utf-8') as configfile:
                 config.write(configfile)
         except Exception as e:
@@ -1011,11 +1277,30 @@ class TelemetryDashboard:
         self.root.attributes('-topmost', self.always_on_top.get())
     
     def toggle_title_bar(self):
-        """切换窗口标题栏显示状态"""
+        """切换标题栏显示状态"""
         if self.show_title_bar.get():
-            self.root.overrideredirect(False)  # 显示标题栏
+            self.root.overrideredirect(False)
         else:
-            self.root.overrideredirect(True)   # 隐藏标题栏
+            self.root.overrideredirect(True)
+            
+    def toggle_overlay(self):
+        """切换游戏内覆盖层显示状态"""
+        if not hasattr(self, 'overlay') or self.overlay is None:
+            print("游戏内覆盖层功能不可用，因为 PyWin32 库未安装。")
+            self.show_overlay.set(False)
+            return
+            
+        if self.show_overlay.get():
+            # 如果勾选了显示，但悬浮窗还没有显示，则显示它
+            if not self.overlay.visible:
+                self.overlay.show()
+        else:
+            # 如果取消了勾选，但悬浮窗还在显示，则隐藏它
+            if self.overlay.visible:
+                self.overlay.hide()
+                
+        # 保存配置
+        self.save_config()
     
     def change_transparency(self, value):
         """改变窗口透明度"""
@@ -1434,10 +1719,19 @@ class TelemetryDashboard:
     
     def update_values(self, data):
         try:
-            # 如果更新被暂停，则不更新UI
+            # 更新最后更新时间，防止watchdog重启线程
+            self.last_update_time = time.time()
+            
+            # 无论GUI是否暂停，始终更新游戏内覆盖层
+            if hasattr(self, 'overlay') and self.overlay is not None and self.show_overlay.get():
+                # 如果悬浮窗应该显示但还没有显示，则显示它
+                if not self.overlay.visible:
+                    self.overlay.show()
+                # 更新悬浮窗数据
+                self.overlay.update_data(data)
+            
+            # 如果更新被暂停，则不更新GUI
             if hasattr(self, 'pause_updates') and self.pause_updates:
-                # 仍然更新最后更新时间，防止watchdog重启线程
-                self.last_update_time = time.time()
                 return
                 
             # Get current theme colors
@@ -1461,7 +1755,7 @@ class TelemetryDashboard:
                 self.water_temp_label.config(foreground='#FFA500')  # 明亮的橙色，适合两种主题
             else:
                 self.water_temp_label.config(foreground=colors['fg'])  # 使用主题对应的文字颜色
-            
+                
             self.turbo_pressure_label.config(text=f"{data['turbo_pressure']:.2f} bar")
             self.race_time_label.config(text=f"{data['race_time']:.2f} s")
             
@@ -1522,9 +1816,6 @@ class TelemetryDashboard:
             self.current_fr_slip = data['slip_fr']
             self.current_rl_slip = data['slip_rl']
             self.current_rr_slip = data['slip_rr']
-            
-            # 更新最后更新时间
-            self.last_update_time = time.time()
             
         except Exception as e:
             print(f"Error in update_values: {e}")
@@ -1639,6 +1930,10 @@ class TelemetryDashboard:
                 app.exit_event.set()  # 通知所有线程退出
                 app.update_thread_running = False
                 
+                # 销毁游戏内覆盖层
+                if hasattr(app, 'overlay') and app.overlay is not None:
+                    app.overlay.destroy()
+                
                 # 给线程一些时间来清理
                 time.sleep(0.2)
                 
@@ -1706,6 +2001,12 @@ else:
     config['GUI'] = {
         'fps': '60.0',                  # GUI更新帧率 (10-60)
         'pause_updates': 'False'        # 是否暂停GUI更新
+    }
+    # 添加UI设置
+    config['UI'] = {
+        'show_overlay': 'False',        # 是否显示游戏内覆盖层
+        'overlay_x': '',                # 悬浮窗X坐标（空表示使用默认位置）
+        'overlay_y': ''                 # 悬浮窗Y坐标（空表示使用默认位置）
     }
     # Write the default configuration to an external file with comments
     with open(config_path, 'w', encoding='utf-8') as configfile:
