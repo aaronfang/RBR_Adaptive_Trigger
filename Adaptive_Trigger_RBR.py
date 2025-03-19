@@ -17,15 +17,15 @@ import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-# 尝试导入 Windows 特定的模块，如果不可用则提供替代方案
+# Try to import Windows-specific modules, provide alternatives if not available
 try:
     import win32gui
     import win32con
     import win32api
     WINDOWS_API_AVAILABLE = True
 except ImportError:
-    print("警告: PyWin32 库未安装，游戏内覆盖层功能将不可用。")
-    print("请使用 'pip install pywin32' 安装所需库。")
+    print("Warning: PyWin32 library is not installed. In-game overlay feature will not be available.")
+    print("Please install the required library using 'pip install pywin32'.")
     WINDOWS_API_AVAILABLE = False
 
 # Define memory reading functions
@@ -486,42 +486,49 @@ def interpolate_color(color1, color2, factor):
     return (int(r), int(g), int(b))
 
 class TelemetryOverlay:
-    """游戏画面上的遥测数据覆盖层"""
+    """In-game telemetry data overlay"""
     def __init__(self):
         self.window = None
         self.canvas = None
         self.visible = False
         self.telemetry_data = {}
         self.font_size = 14
-        self.text_color = "#00FF00"  # 绿色文字
-        self.bg_color = "#000000"  # 黑色背景
-        self.bg_opacity = 70  # 背景透明度 (0-255)，增加一点不透明度
-        self.position = "top-right"  # 位置: top-left, top-right, bottom-left, bottom-right
+        self.text_color = "#00FF00"  # Green text
+        self.bg_color = "#000000"  # Black background
+        self.bg_opacity = 0.7  # Background opacity (0.0-1.0)
+        self.position = "top-right"  # Position: top-left, top-right, bottom-left, bottom-right
         self.padding = 10
-        # 调整窗口大小，只适合显示水温信息
+        # Adjust window size for water temperature display only
         self.width = 200
         self.height = 30
-        # 保存自定义位置
+        # Save custom position
         self.custom_x = None
         self.custom_y = None
-        # 位置是否已更改标志
+        # Position change flag
         self.position_changed = False
-        # 保存配置的回调函数
+        # Save configuration callback
         self.save_callback = None
         
+    def set_opacity(self, opacity):
+        """Set overlay background opacity (0.0-1.0)"""
+        self.bg_opacity = float(opacity)
+        if self.window:
+            self.window.attributes('-alpha', self.bg_opacity)
+        self.redraw()
+        
     def create_window(self):
-        """创建覆盖窗口"""
+        """Create overlay window"""
         if self.window:
             return
             
-        # 创建一个无边框窗口
+        # Create an undecorated window
         self.window = tk.Toplevel()
-        self.window.overrideredirect(True)  # 移除标题栏和边框
-        self.window.attributes('-topmost', True)  # 保持在最上层
-        self.window.attributes('-alpha', 0.7)  # 设置整体透明度为0.7，使其更适合游戏内显示
-        self.window.attributes('-transparentcolor', '')  # 设置透明色
+        self.window.overrideredirect(True)  # Remove title bar and border
+        self.window.attributes('-topmost', True)  # Keep on top
+        self.window.attributes('-alpha', self.bg_opacity)  # Set overall transparency
+        self.window.attributes('-transparentcolor', '')  # Set transparent color
         
-        # 设置窗口样式为工具窗口，这样它不会出现在任务栏中
+        # Set window style to tool window, so it doesn't appear in the taskbar
         if WINDOWS_API_AVAILABLE:
             try:
                 hwnd = win32gui.GetParent(self.window.winfo_id())
@@ -529,16 +536,16 @@ class TelemetryOverlay:
                 style = style | win32con.WS_EX_TOOLWINDOW | win32con.WS_EX_LAYERED
                 win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, style)
             except Exception as e:
-                print(f"设置窗口样式时出错: {e}")
+                print(f"Error setting window style: {e}")
         
-        # 创建画布
+        # Create canvas
         self.canvas = tk.Canvas(self.window, bg=self.bg_color, highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
-        # 设置初始大小和位置
+        # Set initial size and position
         self.update_position()
         
-        # 绑定鼠标事件，允许拖动窗口
+        # Bind mouse events to allow window dragging
         self.canvas.bind("<ButtonPress-1>", self.start_move)
         self.canvas.bind("<ButtonRelease-1>", self.stop_move)
         self.canvas.bind("<B1-Motion>", self.do_move)
@@ -548,39 +555,39 @@ class TelemetryOverlay:
         self.y = 0
         
     def start_move(self, event):
-        """开始拖动窗口"""
+        """Start dragging window"""
         self.moving = True
         self.x = event.x
         self.y = event.y
         
     def stop_move(self, event):
-        """停止拖动窗口"""
+        """Stop dragging window"""
         self.moving = False
-        # 如果位置已更改，通知主窗口保存配置
+        # If position has changed, notify main window to save configuration
         if self.position_changed and hasattr(self, 'save_callback') and self.save_callback:
             self.save_callback()
     
     def do_move(self, event):
-        """拖动窗口"""
+        """Drag window"""
         if self.moving:
             x = self.window.winfo_x() + (event.x - self.x)
             y = self.window.winfo_y() + (event.y - self.y)
             self.window.geometry(f"+{x}+{y}")
-            # 保存自定义位置
+            # Save custom position
             self.custom_x = x
             self.custom_y = y
-            # 通知需要保存配置
+            # Notify need to save configuration
             self.position_changed = True
     
     def update_position(self):
-        """更新窗口位置"""
+        """Update window position"""
         screen_width = self.window.winfo_screenwidth()
         screen_height = self.window.winfo_screenheight()
         
-        # 如果有自定义位置，优先使用
+        # If there's a custom position, use it first
         if self.custom_x is not None and self.custom_y is not None:
             x, y = self.custom_x, self.custom_y
-        # 否则使用预设位置
+        # Otherwise use preset position
         elif self.position == "top-left":
             x, y = self.padding, self.padding
         elif self.position == "top-right":
@@ -589,33 +596,33 @@ class TelemetryOverlay:
             x, y = self.padding, screen_height - self.height - self.padding
         elif self.position == "bottom-right":
             x, y = screen_width - self.width - self.padding, screen_height - self.height - self.padding
-        else:  # 默认右上角
+        else:  # Default top-right
             x, y = screen_width - self.width - self.padding, self.padding
             
         self.window.geometry(f"{self.width}x{self.height}+{x}+{y}")
     
     def show(self):
-        """显示覆盖窗口"""
+        """Show overlay window"""
         if not self.window:
             self.create_window()
         self.window.deiconify()
         self.visible = True
         
     def hide(self):
-        """隐藏覆盖窗口"""
+        """Hide overlay window"""
         if self.window:
             self.window.withdraw()
         self.visible = False
         
     def toggle_visibility(self):
-        """切换可见性"""
+        """Toggle visibility"""
         if self.visible:
             self.hide()
         else:
             self.show()
             
     def update_data(self, data):
-        """更新遥测数据并重绘"""
+        """Update telemetry data and redraw"""
         if not self.visible or not self.window:
             return
             
@@ -623,35 +630,35 @@ class TelemetryOverlay:
         self.redraw()
         
     def redraw(self):
-        """重绘覆盖窗口内容"""
+        """Redraw overlay window content"""
         if not self.visible or not self.window:
             return
             
         self.canvas.delete("all")
         
-        # 绘制半透明背景
+        # Draw semi-transparent background
         self.canvas.create_rectangle(0, 0, self.width, self.height, fill=self.bg_color, outline="")
         
-        # 如果没有数据，显示等待消息
+        # If there's no data, display waiting message
         if not self.telemetry_data:
             self.canvas.create_text(
                 self.width // 2, 
                 self.height // 2, 
-                text="等待数据...", 
+                text="Waiting for data...", 
                 fill=self.text_color,
                 font=("Arial", self.font_size)
             )
             return
             
-        # 只显示水温
+        # Only show water temperature
         if 'water_temp' in self.telemetry_data:
             water_temp = self.telemetry_data['water_temp']
-            # 根据温度改变颜色
+            # Change color based on temperature
             temp_color = self.text_color
-            if water_temp > 105:  # 过热
-                temp_color = "#FF0000"  # 红色
-            elif water_temp > 95:  # 偏高
-                temp_color = "#FFFF00"  # 黄色
+            if water_temp > 105:  # Overheat
+                temp_color = "#FF0000"  # Red
+            elif water_temp > 95:  # High
+                temp_color = "#FFFF00"  # Yellow
                 
             temp_text = f"WaterTemp: {water_temp:.1f} °C"
             self.canvas.create_text(
@@ -663,7 +670,7 @@ class TelemetryOverlay:
             )
     
     def destroy(self):
-        """销毁覆盖窗口"""
+        """Destroy overlay window"""
         if self.window:
             self.window.destroy()
             self.window = None
@@ -671,22 +678,22 @@ class TelemetryOverlay:
             self.visible = False
     
     def load_position(self, config):
-        """从配置加载位置"""
+        """Load position from configuration"""
         if 'UI' in config and 'overlay_x' in config['UI'] and 'overlay_y' in config['UI']:
             try:
                 self.custom_x = int(config['UI']['overlay_x'])
                 self.custom_y = int(config['UI']['overlay_y'])
-                print(f"已加载悬浮窗位置: x={self.custom_x}, y={self.custom_y}")
+                print(f"Loaded floating window position: x={self.custom_x}, y={self.custom_y}")
             except (ValueError, TypeError):
                 self.custom_x = None
                 self.custom_y = None
-                print("悬浮窗位置格式错误，使用默认位置")
+                print("Floating window position format error, using default position")
         else:
             self.custom_x = None
             self.custom_y = None
             
     def save_position(self, config):
-        """保存位置到配置"""
+        """Save position to configuration"""
         if self.position_changed and self.custom_x is not None and self.custom_y is not None:
             if 'UI' not in config:
                 config['UI'] = {}
@@ -703,58 +710,65 @@ class TelemetryDashboard:
         self.root.title("RBR Telemetry Dashboard")
         self.root.geometry("830x460")
         
-        # 初始化游戏内覆盖层
+        # Initialize in-game overlay
         if WINDOWS_API_AVAILABLE:
             self.overlay = TelemetryOverlay()
-            # 从配置加载悬浮窗位置
+            # Load floating window position from configuration
             self.overlay.load_position(config)
-            # 设置保存配置的回调函数
+            # Load opacity setting from configuration
+            if 'UI' in config and 'overlay_opacity' in config['UI']:
+                try:
+                    opacity = float(config['UI']['overlay_opacity'])
+                    self.overlay.bg_opacity = opacity
+                except (ValueError, TypeError):
+                    pass  # Use default opacity if invalid value in config
+            # Set callback function to save configuration
             self.overlay.save_callback = self.save_config
             
-            # 根据配置决定是否显示悬浮窗
+            # Based on configuration, decide whether to show the overlay
             self.show_overlay = tk.BooleanVar(value=config.getboolean('UI', 'show_overlay', fallback=False))
             if self.show_overlay.get():
                 self.overlay.show()
         else:
             self.overlay = None
             self.show_overlay = tk.BooleanVar(value=False)
-            print("游戏内覆盖层功能不可用，因为 PyWin32 库未安装。")
+            print("In-game overlay feature not available because PyWin32 library is not installed.")
         
-        # 设置窗口图标和任务栏图标
+        # Set window icon and taskbar icon
         try:
             if getattr(sys, 'frozen', False):
-                # 如果是打包后的exe
+                # If the application is run as a bundle
                 icon_path = os.path.join(sys._MEIPASS, "icon.ico")
             else:
-                # 如果是直接运行python脚本
+                # If the application is run as a script
                 icon_path = "icon.ico"
             
             if os.path.exists(icon_path):
                 self.root.iconbitmap(icon_path)
-                # 设置任务栏图标
+                # Set taskbar icon
                 import ctypes
-                myappid = 'rbr.dualsense.adapter.1.0'  # 任意字符串，作为应用程序ID
+                myappid = 'rbr.dualsense.adapter.1.0'  # Any string, as application ID
                 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
                 self.root.iconbitmap(default=icon_path)
         except Exception as e:
             print(f"Failed to set window icon: {e}")
         
-        # Set up fonts - 移到最前面
+        # Set up fonts - Move to the front
         self.title_font = tkfont.Font(family="Arial", size=12, weight="bold")
         self.value_font = tkfont.Font(family="Arial", size=11)
         
-        # 添加反馈强度参数
+        # Add feedback strength parameter
         self.trigger_strength = tk.DoubleVar(value=trigger_strength)
         self.haptic_strength = tk.DoubleVar(value=haptic_strength)
         self.wheel_slip_threshold = tk.DoubleVar(value=wheel_slip_threshold)
         self.trigger_threshold = tk.DoubleVar(value=trigger_threshold)
         
-        # 添加功能开关变量
+        # Add feature toggle variables
         self.adaptive_trigger_enabled = tk.BooleanVar(value=adaptive_trigger_enabled)
         self.haptic_effect_enabled = tk.BooleanVar(value=haptic_effect_enabled)
         self.led_effect_enabled = tk.BooleanVar(value=led_effect_enabled)
         
-        # 添加主题配置
+        # Add theme configuration
         self.is_dark_theme = tk.BooleanVar(value=False)
         self.theme_colors = {
             'light': {
@@ -771,13 +785,13 @@ class TelemetryDashboard:
             }
         }
         
-        # 添加暂停更新的标志和FPS控制变量 - 移到前面初始化，在create_control_panel()之前
+        # Add pause update flag and FPS control variable - Move to the front, before create_control_panel()
         self.pause_updates = config.getboolean('GUI', 'pause_updates', fallback=False)
-        fps_value = min(config.getfloat('GUI', 'fps', fallback=60.0), 60.0)  # 确保不超过60
+        fps_value = min(config.getfloat('GUI', 'fps', fallback=60.0), 60.0)  # Ensure it doesn't exceed 60
         self.fps_value = tk.DoubleVar(value=fps_value)
-        self.update_interval = 1.0 / self.fps_value.get()  # 计算更新间隔
+        self.update_interval = 1.0 / self.fps_value.get()  # Calculate update interval
         
-        # 配置初始主题样式
+        # Configure initial theme style
         style = ttk.Style()
         style.configure("Theme.TFrame", background=self.theme_colors['light']['bg'])
         style.configure("Theme.TLabel", background=self.theme_colors['light']['bg'], foreground=self.theme_colors['light']['fg'])
@@ -787,7 +801,7 @@ class TelemetryDashboard:
         self.root.configure(bg=self.theme_colors['light']['bg'])
         self.root.resizable(True, True)
         
-        # 设置窗口半透明
+        # Set window semi-transparent
         self.root.attributes('-alpha', 1.0)
         
         # Initialize time tracking and data structures
@@ -820,10 +834,10 @@ class TelemetryDashboard:
         self.current_rl_slip = 0
         self.current_rr_slip = 0
         
-        # 添加置顶按钮和透明度控制
+        # Add top button and transparency control
         self.create_control_panel()
         
-        # 配置行和列的权重，使得窗口调整大小时内容也随之调整
+        # Configure row and column weights, so window resizes content accordingly
         self.root.grid_columnconfigure(0, weight=1)
         self.root.grid_rowconfigure(0, weight=1)
         
@@ -831,10 +845,10 @@ class TelemetryDashboard:
         self.main_frame = ttk.Frame(self.root, padding=10)
         self.main_frame.grid(row=0, column=0, sticky="nsew")
         
-        # 配置main_frame的行和列权重
+        # Configure main_frame's row and column weights
         self.main_frame.grid_columnconfigure(0, weight=1)
-        # 移除行权重配置，让分组使用其自然高度
-        # 最后一行设置权重为1，以吸收多余的空间
+        # Remove row weight configuration, let group use natural height
+        # Last row set weight to 1 to absorb extra space
         self.main_frame.grid_rowconfigure(3, weight=1)
         
         # Create style for progress bars and widgets
@@ -845,7 +859,7 @@ class TelemetryDashboard:
         style.configure("red.Horizontal.TProgressbar", background='red')
         style.configure("blue.Horizontal.TProgressbar", background='blue')
         
-        # 创建反向进度条样式（从右向左）
+        # Create reverse progress bar style (from right to left)
         style.configure("Reverse.Horizontal.TProgressbar", background='#4a6984')
         
         style.configure("TLabel", background='#F0F0F0', foreground='black')
@@ -853,23 +867,23 @@ class TelemetryDashboard:
         style.configure("TLabelframe", background='#F0F0F0')
         style.configure("TLabelframe.Label", background='#F0F0F0', foreground='black')
         
-        # 添加折叠按钮的自定义样式
+        # Add custom style for collapsible button
         style.configure("Collapse.TButton", 
                       padding=0,
                       relief="flat",
-                      font=('Arial', 8),  # 使用更小的字体
+                      font=('Arial', 8),  # Use smaller font
                       width=2,
                       background=self.theme_colors['light']['bg'])
         
-        # 添加状态栏
+        # Add status bar
         self.status_bar = ttk.Label(self.root, text="Ready", relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.grid(row=1, column=0, sticky="ew")
         
         # Create sections with collapsible frames in the new order
-        self.create_wheel_slip_graphs_section()  # 第一个：轮胎打滑状态图表
-        self.create_vibration_graphs_section()   # 第二个：震动强度图表
-        self.create_car_info_section()          # 第三个：车辆信息
-        self.create_control_inputs_section()    # 第四个：控制输入
+        self.create_wheel_slip_graphs_section()  # First: tire slip status graph
+        self.create_vibration_graphs_section()   # Second: vibration intensity graph
+        self.create_car_info_section()          # Third: vehicle information
+        self.create_control_inputs_section()    # Fourth: control inputs
         
         # Initialize values
         self.update_values({
@@ -887,26 +901,26 @@ class TelemetryDashboard:
         self.update_timeout = 5.0  # Seconds before considering the update thread stuck
     
     def create_collapsible_frame(self, parent, text, row, column, columnspan=1):
-        """创建可折叠的框架"""
-        # 创建一个容器框架来包含折叠按钮和主框架
+        """Create collapsible frame"""
+        # Create a container frame to contain collapsible button and main frame
         container = ttk.Frame(parent, style='Theme.TFrame')
-        container.grid(row=row, column=column, columnspan=columnspan, padx=5, pady=(0, 5), sticky="new")  # 修改sticky为"new"并调整padding
-        container.grid_columnconfigure(1, weight=1)  # 让主框架可以横向扩展
+        container.grid(row=row, column=column, columnspan=columnspan, padx=5, pady=(0, 5), sticky="new")  # Change sticky to "new" and adjust padding
+        container.grid_columnconfigure(1, weight=1)  # Allow main frame to expand horizontally
         
-        # 添加折叠按钮 - 放在左上角，使用自定义样式
+        # Add collapsible button - placed in top-left corner, using custom style
         toggle_btn = ttk.Button(container, text="▼", style="Collapse.TButton",
                               command=lambda: self.toggle_frame(frame, toggle_btn, container))
         toggle_btn.grid(row=0, column=0, sticky="nw", padx=(0, 2))
         
-        # 添加标题标签
+        # Add title label
         title_label = ttk.Label(container, text=text, style='Theme.TLabel', font=self.title_font)
         title_label.grid(row=0, column=1, sticky="w")
         
-        # 创建主框架
+        # Create main frame
         frame = ttk.Frame(container, style='Theme.TFrame', padding=(15, 5, 5, 5))
-        frame.grid(row=1, column=0, columnspan=2, sticky="new", pady=(2, 0))  # 修改sticky为"new"
+        frame.grid(row=1, column=0, columnspan=2, sticky="new", pady=(2, 0))  # Change sticky to "new"
         
-        # 存储引用
+        # Store reference
         frame.container = container
         frame.toggle_btn = toggle_btn
         frame.is_collapsed = False
@@ -914,29 +928,29 @@ class TelemetryDashboard:
         return frame, frame
     
     def toggle_frame(self, frame, btn, container):
-        """切换框架的折叠状态"""
+        """Toggle frame's collapsible state"""
         if frame.is_collapsed:
-            # 展开
+            # Expand
             frame.grid()
             btn.configure(text="▼")
             frame.is_collapsed = False
-            container.grid_configure(pady=(0, 5))  # 保持一致的间距
+            container.grid_configure(pady=(0, 5))  # Maintain consistent spacing
         else:
-            # 折叠
+            # Collapse
             frame.grid_remove()
             btn.configure(text="▶")
             frame.is_collapsed = True
-            container.grid_configure(pady=(0, 5))  # 保持一致的间距
+            container.grid_configure(pady=(0, 5))  # Maintain consistent spacing
         
-        # 强制更新布局
+        # Force layout update
         self.root.update_idletasks()
     
     def create_control_panel(self):
-        """创建控制面板，包含置顶按钮和透明度控制"""
+        """Create control panel, containing top button and transparency control"""
         self.control_panel = ttk.Frame(self.root, style='Theme.TFrame')
         self.control_panel.grid(row=2, column=0, sticky="ew", padx=5, pady=5)
         
-        # 置顶按钮
+        # Top button
         self.always_on_top = tk.BooleanVar(value=False)
         always_on_top_cb = ttk.Checkbutton(
             self.control_panel, 
@@ -947,7 +961,7 @@ class TelemetryDashboard:
         )
         always_on_top_cb.pack(side=tk.LEFT, padx=5)
         
-        # 标题栏切换按钮
+        # Title bar toggle button
         self.show_title_bar = tk.BooleanVar(value=True)
         title_bar_cb = ttk.Checkbutton(
             self.control_panel,
@@ -958,22 +972,22 @@ class TelemetryDashboard:
         )
         title_bar_cb.pack(side=tk.LEFT, padx=5)
         
-        # 游戏内覆盖层切换按钮
+        # In-game overlay toggle button
         overlay_cb = ttk.Checkbutton(
             self.control_panel,
-            text="游戏内显示",
+            text="In-game Display",
             variable=self.show_overlay,
             command=self.toggle_overlay,
             style='Theme.TCheckbutton'
         )
         overlay_cb.pack(side=tk.LEFT, padx=5)
         
-        # 如果 PyWin32 不可用，禁用覆盖层切换按钮
+        # If PyWin32 is not available, disable overlay toggle button
         if not WINDOWS_API_AVAILABLE:
             overlay_cb.configure(state='disabled')
             self.show_overlay.set(False)
         
-        # 主题切换按钮
+        # Theme toggle button
         theme_cb = ttk.Checkbutton(
             self.control_panel,
             text="Dark Theme",
@@ -983,21 +997,21 @@ class TelemetryDashboard:
         )
         theme_cb.pack(side=tk.LEFT, padx=5)
         
-        # 透明度控制
-        ttk.Label(self.control_panel, text="Transparency:", style='Theme.TLabel').pack(side=tk.LEFT, padx=(10, 0))
-        self.transparency_scale = ttk.Scale(
+        # Overlay opacity control
+        ttk.Label(self.control_panel, text="Overlay Opacity:", style='Theme.TLabel').pack(side=tk.LEFT, padx=(10, 0))
+        self.opacity_scale = ttk.Scale(
             self.control_panel, 
-            from_=0.3, 
+            from_=0.1, 
             to=1.0, 
             orient=tk.HORIZONTAL, 
             length=100,
-            value=1.0,
-            command=self.change_transparency,
+            value=0.7,
+            command=self.change_opacity,
             style='Theme.Horizontal.TScale'
         )
-        self.transparency_scale.pack(side=tk.LEFT, padx=5)
+        self.opacity_scale.pack(side=tk.LEFT, padx=5)
         
-        # 创建反馈控制面板
+        # Create feedback control panel
         self.feedback_frame, content = self.create_collapsible_frame(
             self.root, 
             "Feedback Controls", 
@@ -1006,23 +1020,23 @@ class TelemetryDashboard:
             columnspan=1
         )
         
-        # 配置列权重，使进度条可以均匀扩展
-        content.grid_columnconfigure(0, weight=1)  # 让整个内容区域可以扩展
+        # Configure column weights, so progress bar can expand evenly
+        content.grid_columnconfigure(0, weight=1)  # Allow entire content area to expand
         
-        # 添加功能开关控制
+        # Add feature toggle control
         features_frame = ttk.Frame(content, style='Theme.TFrame')
         features_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=2)
         features_frame.grid_columnconfigure(0, weight=1)
         
-        # 创建功能开关标题
+        # Create feature toggle title
         # features_label = ttk.Label(features_frame, text="Feature Toggles:", style='Theme.TLabel', font=self.title_font)
         # features_label.grid(row=0, column=0, sticky="w", pady=(0, 5))
         
-        # 创建功能开关子框架 - 将所有开关放在同一行
+        # Create feature toggle sub-frame - Put all toggles on the same line
         toggles_frame = ttk.Frame(features_frame, style='Theme.TFrame')
         toggles_frame.grid(row=1, column=0, sticky="ew", padx=5)
         
-        # 自适应扳机开关
+        # Adaptive trigger toggle
         adaptive_trigger_cb = ttk.Checkbutton(
             toggles_frame,
             text="Adaptive Triggers",
@@ -1032,7 +1046,7 @@ class TelemetryDashboard:
         )
         adaptive_trigger_cb.pack(side=tk.LEFT, padx=(0, 15))
         
-        # 震动反馈开关
+        # Haptic feedback toggle
         haptic_effect_cb = ttk.Checkbutton(
             toggles_frame,
             text="Haptic Feedback",
@@ -1042,7 +1056,7 @@ class TelemetryDashboard:
         )
         haptic_effect_cb.pack(side=tk.LEFT, padx=(0, 15))
         
-        # LED效果开关
+        # LED effect toggle
         led_effect_cb = ttk.Checkbutton(
             toggles_frame,
             text="LED Effects",
@@ -1052,14 +1066,14 @@ class TelemetryDashboard:
         )
         led_effect_cb.pack(side=tk.LEFT)
         
-        # 添加分隔线
+        # Add separator
         separator = ttk.Separator(content, orient="horizontal")
         separator.grid(row=1, column=0, sticky="ew", padx=5, pady=10)
         
-        # 自适应扳机强度控制
+        # Adaptive trigger strength control
         trigger_frame = ttk.Frame(content, style='Theme.TFrame')
         trigger_frame.grid(row=2, column=0, sticky="ew", padx=5, pady=2)
-        trigger_frame.grid_columnconfigure(1, weight=1)  # 让进度条可以扩展
+        trigger_frame.grid_columnconfigure(1, weight=1)  # Allow progress bar to expand
         
         ttk.Label(trigger_frame, text="Trigger Strength:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
         trigger_scale = ttk.Scale(
@@ -1075,10 +1089,10 @@ class TelemetryDashboard:
         self.trigger_value_label = ttk.Label(trigger_frame, style='Theme.TLabel', width=5, anchor="e")
         self.trigger_value_label.grid(row=0, column=2)
         
-        # Haptic震动强度控制
+        # Haptic vibration strength control
         haptic_frame = ttk.Frame(content, style='Theme.TFrame')
         haptic_frame.grid(row=3, column=0, sticky="ew", padx=5, pady=2)
-        haptic_frame.grid_columnconfigure(1, weight=1)  # 让进度条可以扩展
+        haptic_frame.grid_columnconfigure(1, weight=1)  # Allow progress bar to expand
         
         ttk.Label(haptic_frame, text="Haptic Strength:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
         haptic_scale = ttk.Scale(
@@ -1094,10 +1108,10 @@ class TelemetryDashboard:
         self.haptic_value_label = ttk.Label(haptic_frame, style='Theme.TLabel', width=5, anchor="e")
         self.haptic_value_label.grid(row=0, column=2)
         
-        # 轮胎打滑检测阈值控制
+        # Tire slip detection threshold control
         slip_frame = ttk.Frame(content, style='Theme.TFrame')
         slip_frame.grid(row=4, column=0, sticky="ew", padx=5, pady=2)
-        slip_frame.grid_columnconfigure(1, weight=1)  # 让进度条可以扩展
+        slip_frame.grid_columnconfigure(1, weight=1)  # Allow progress bar to expand
         
         ttk.Label(slip_frame, text="Trigger Slip Threshold:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
         slip_scale = ttk.Scale(
@@ -1113,10 +1127,10 @@ class TelemetryDashboard:
         self.slip_value_label = ttk.Label(slip_frame, style='Theme.TLabel', width=5, anchor="e")
         self.slip_value_label.grid(row=0, column=2)
         
-        # 触发阈值控制
+        # Trigger threshold control
         trigger_threshold_frame = ttk.Frame(content, style='Theme.TFrame')
         trigger_threshold_frame.grid(row=5, column=0, sticky="ew", padx=5, pady=2)
-        trigger_threshold_frame.grid_columnconfigure(1, weight=1)  # 让进度条可以扩展
+        trigger_threshold_frame.grid_columnconfigure(1, weight=1)  # Allow progress bar to expand
         
         ttk.Label(trigger_threshold_frame, text="Haptic Slip Threshold:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
         threshold_scale = ttk.Scale(
@@ -1132,10 +1146,10 @@ class TelemetryDashboard:
         self.threshold_value_label = ttk.Label(trigger_threshold_frame, style='Theme.TLabel', width=5, anchor="e")
         self.threshold_value_label.grid(row=0, column=2)
         
-        # 初始化所有值的显示
+        # Initialize display of all values
         self.update_all_value_labels()
         
-        # 添加暂停更新按钮
+        # Add pause update button
         self.pause_button = ttk.Button(
             self.control_panel, 
             text="Resume Update" if self.pause_updates else "Pause Update", 
@@ -1144,7 +1158,7 @@ class TelemetryDashboard:
         )
         self.pause_button.pack(side=tk.RIGHT, padx=5)
         
-        # 添加FPS控制
+        # Add FPS control
         fps_frame = ttk.Frame(self.control_panel, style='Theme.TFrame')
         fps_frame.pack(side=tk.RIGHT, padx=5)
         
@@ -1152,7 +1166,7 @@ class TelemetryDashboard:
         fps_scale = ttk.Scale(
             fps_frame,
             from_=10.0,
-            to=60.0,  # 将最大值从120改为60
+            to=60.0,  # Changed maximum value from 120 to 60
             orient=tk.HORIZONTAL,
             length=80,
             variable=self.fps_value,
@@ -1165,14 +1179,14 @@ class TelemetryDashboard:
         self.fps_label.pack(side=tk.LEFT)
     
     def update_all_value_labels(self):
-        """更新所有数值标签的显示"""
+        """Update display of all numerical labels"""
         self.trigger_value_label.config(text=f"{self.trigger_strength.get():.1f}")
         self.haptic_value_label.config(text=f"{self.haptic_strength.get():.1f}")
         self.slip_value_label.config(text=f"{self.wheel_slip_threshold.get():.1f}")
         self.threshold_value_label.config(text=f"{self.trigger_threshold.get():.1f}")
     
     def toggle_pause_updates(self):
-        """切换暂停/恢复更新状态"""
+        """Toggle pause/resume update state"""
         self.pause_updates = not self.pause_updates
         if self.pause_updates:
             self.pause_button.config(text="Resume Update")
@@ -1181,34 +1195,34 @@ class TelemetryDashboard:
             self.pause_button.config(text="Pause Update")
             self.status_bar.config(text="Update Resumed")
         
-        # 更新配置文件
+        # Update configuration file
         if 'GUI' not in config:
             config['GUI'] = {}
         config['GUI']['pause_updates'] = str(self.pause_updates)
         self.save_config()
     
     def update_fps(self, *args):
-        """更新FPS设置"""
-        fps = min(self.fps_value.get(), 60.0)  # 确保不超过60
+        """Update FPS settings"""
+        fps = min(self.fps_value.get(), 60.0)  # Ensure it doesn't exceed 60
         self.update_interval = 1.0 / fps
         self.fps_label.config(text=f"{fps:.0f}")
         
-        # 更新配置文件
+        # Update configuration file
         if 'GUI' not in config:
             config['GUI'] = {}
         config['GUI']['fps'] = f"{fps:.1f}"
         self.save_config()
     
     def save_config(self):
-        """保存配置到文件"""
+        """Save configuration to file"""
         try:
-            # 保存覆盖层设置
+            # Save overlay settings
             if hasattr(self, 'show_overlay') and WINDOWS_API_AVAILABLE:
                 if 'UI' not in config:
                     config['UI'] = {}
                 config['UI']['show_overlay'] = str(self.show_overlay.get())
                 
-                # 保存悬浮窗位置
+                # Save floating window position
                 if hasattr(self, 'overlay') and self.overlay is not None:
                     self.overlay.save_position(config)
                 
@@ -1218,16 +1232,16 @@ class TelemetryDashboard:
             print(f"Error saving config: {e}")
     
     def update_feedback_strength(self, format_target=None, *args):
-        """更新反馈强度参数"""
+        """Update feedback strength parameter"""
         global trigger_strength, haptic_strength, wheel_slip_threshold, trigger_threshold
         
-        # 更新全局变量
+        # Update global variables
         trigger_strength = self.trigger_strength.get()
         haptic_strength = self.haptic_strength.get()
         wheel_slip_threshold = self.wheel_slip_threshold.get()
         trigger_threshold = self.trigger_threshold.get()
         
-        # 更新显示的数值
+        # Update displayed values
         if format_target is not None:
             if format_target == self.trigger_value_label:
                 format_target.config(text=f"{trigger_strength:.1f}")
@@ -1238,7 +1252,7 @@ class TelemetryDashboard:
             elif format_target == self.threshold_value_label:
                 format_target.config(text=f"{trigger_threshold:.1f}")
         
-        # 更新配置文件
+        # Update configuration file
         config['Feedback'] = {
             'trigger_strength': f"{trigger_strength:.1f}",
             'haptic_strength': f"{haptic_strength:.1f}",
@@ -1284,27 +1298,37 @@ class TelemetryDashboard:
             self.root.overrideredirect(True)
             
     def toggle_overlay(self):
-        """切换游戏内覆盖层显示状态"""
+        """Toggle in-game overlay display state"""
         if not hasattr(self, 'overlay') or self.overlay is None:
-            print("游戏内覆盖层功能不可用，因为 PyWin32 库未安装。")
+            print("In-game overlay feature not available because PyWin32 library is not installed.")
             self.show_overlay.set(False)
             return
             
         if self.show_overlay.get():
-            # 如果勾选了显示，但悬浮窗还没有显示，则显示它
-            if not self.overlay.visible:
-                self.overlay.show()
+            # If display is checked, check if game is running
+            if is_game_running():
+                # If overlay is not shown yet, show it
+                if not self.overlay.visible:
+                    self.overlay.show()
+            else:
+                print("Game is not running. Overlay will be shown when the game starts.")
         else:
-            # 如果取消了勾选，但悬浮窗还在显示，则隐藏它
+            # If unchecked but overlay is still showing, hide it
             if self.overlay.visible:
                 self.overlay.hide()
                 
-        # 保存配置
+        # Save configuration
         self.save_config()
     
-    def change_transparency(self, value):
-        """改变窗口透明度"""
-        self.root.attributes('-alpha', float(value))
+    def change_opacity(self, value):
+        """Change overlay background opacity"""
+        if hasattr(self, 'overlay') and self.overlay is not None:
+            self.overlay.set_opacity(float(value))
+            # Save opacity setting to config
+            if 'UI' not in config:
+                config['UI'] = {}
+            config['UI']['overlay_opacity'] = str(value)
+            self.save_config()
     
     def toggle_theme(self):
         """切换深色/浅色主题"""
@@ -1719,18 +1743,24 @@ class TelemetryDashboard:
     
     def update_values(self, data):
         try:
-            # 更新最后更新时间，防止watchdog重启线程
+            # Update last update time to prevent watchdog from restarting thread
             self.last_update_time = time.time()
             
-            # 无论GUI是否暂停，始终更新游戏内覆盖层
+            # Always update in-game overlay regardless of GUI pause state
             if hasattr(self, 'overlay') and self.overlay is not None and self.show_overlay.get():
-                # 如果悬浮窗应该显示但还没有显示，则显示它
-                if not self.overlay.visible:
-                    self.overlay.show()
-                # 更新悬浮窗数据
-                self.overlay.update_data(data)
+                # Check if game is running
+                if is_game_running():
+                    # If overlay should be shown but isn't yet, show it
+                    if not self.overlay.visible:
+                        self.overlay.show()
+                    # Update overlay data
+                    self.overlay.update_data(data)
+                else:
+                    # If game is not running, ensure overlay is hidden
+                    if self.overlay.visible:
+                        self.overlay.hide()
             
-            # 如果更新被暂停，则不更新GUI
+            # If updates are paused, don't update GUI
             if hasattr(self, 'pause_updates') and self.pause_updates:
                 return
                 
@@ -1744,47 +1774,47 @@ class TelemetryDashboard:
             self.rpm_label.config(text=f"{data['rpm']:.0f}")
             self.gear_label.config(text=f"{data['gear']}")
             
-            # 更新水温并根据温度和主题改变颜色
+            # Update water temperature and change color based on temperature and theme
             water_temp = data['water_temp']
             self.water_temp_label.config(text=f"{water_temp:.1f} °C")
             
-            # 根据水温和当前主题设置颜色警告
+            # Set color warning based on water temperature and current theme
             if water_temp >= 120:
-                self.water_temp_label.config(foreground='#FF4444')  # 明亮的红色，适合两种主题
+                self.water_temp_label.config(foreground='#FF4444')  # Bright red, suitable for both themes
             elif water_temp >= 100:
-                self.water_temp_label.config(foreground='#FFA500')  # 明亮的橙色，适合两种主题
+                self.water_temp_label.config(foreground='#FFA500')  # Bright orange, suitable for both themes
             else:
-                self.water_temp_label.config(foreground=colors['fg'])  # 使用主题对应的文字颜色
+                self.water_temp_label.config(foreground=colors['fg'])  # Use theme's text color
                 
             self.turbo_pressure_label.config(text=f"{data['turbo_pressure']:.2f} bar")
             self.race_time_label.config(text=f"{data['race_time']:.2f} s")
             
-            # 更新RPM进度条
+            # Update RPM progress bar
             rpm_percentage = min(100, data['rpm'] / 8000 * 100)
             self.rpm_bar['value'] = rpm_percentage
             
-            # 更新方向盘进度条
-            steering = data['steering']  # 范围从-1到1
+            # Update steering wheel progress bar
+            steering = data['steering']  # Range from -1 to 1
             self.steering_label.config(text=f"{steering:.2f}")
             
-            # 获取当前Canvas的宽度
+            # Get current Canvas width
             left_width = self.steering_left_canvas.winfo_width()
             right_width = self.steering_right_canvas.winfo_width()
             
-            # 重置两侧进度条
+            # Reset both progress bars
             self.steering_left_canvas.coords(self.steering_left_bar, left_width, 0, left_width, 20)
             self.steering_right_canvas.coords(self.steering_right_bar, 0, 0, 0, 20)
             
-            # 更新方向盘进度条
-            if steering < 0:  # 左转
+            # Update steering wheel progress bar
+            if steering < 0:  # Left turn
                 left_value = abs(steering) * left_width
                 self.steering_left_canvas.coords(self.steering_left_bar, 
-                    left_width - left_value, 0,  # 从右侧开始向左延伸
+                    left_width - left_value, 0,  # Start from right side and move left
                     left_width, 20)
-            elif steering > 0:  # 右转
+            elif steering > 0:  # Right turn
                 right_value = steering * right_width
                 self.steering_right_canvas.coords(self.steering_right_bar,
-                    0, 0,  # 从左侧开始向右延伸
+                    0, 0,  # Start from left side and move right
                     right_value, 20)
             
             # Update control inputs with colored progress bars
@@ -1804,11 +1834,11 @@ class TelemetryDashboard:
             if 'throttle_vibration' in data and 'brake_vibration' in data:
                 self.update_vibration_graphs(data['throttle_vibration'], data['brake_vibration'])
             
-            # 更新状态栏
+            # Update status bar
             self.status_bar.config(text=f"Last update: {time.strftime('%H:%M:%S')} | FPS: {1/self.update_interval:.1f}")
             
-            # 确保GUI更新
-            if self.root.winfo_exists():  # 检查窗口是否仍然存在
+            # Ensure GUI is updated
+            if self.root.winfo_exists():  # Check if window still exists
                 self.root.update_idletasks()
             
             # Store current slip values for graph updates
@@ -1820,7 +1850,7 @@ class TelemetryDashboard:
         except Exception as e:
             print(f"Error in update_values: {e}")
             import traceback
-            traceback.print_exc()  # 打印完整的错误堆栈
+            traceback.print_exc()  # Print full error stack trace
             # Continue execution despite errors
     
     def start_dashboard(self):
@@ -1828,7 +1858,7 @@ class TelemetryDashboard:
             root = tk.Tk()
             app = TelemetryDashboard(root)
             
-            # 创建一个事件标志，用于通知所有线程退出
+            # Create an event flag for all threads to exit
             app.exit_event = threading.Event()
             
             # Create a watchdog thread to monitor the update thread
@@ -1842,7 +1872,7 @@ class TelemetryDashboard:
                             # Cannot forcefully terminate thread in Python, but we can start a new one
                             pass
                         # Start a new update thread
-                        if not app.exit_event.is_set():  # 确保在退出前不启动新线程
+                        if not app.exit_event.is_set():  # Ensure new thread doesn't start before exiting
                             app.update_thread = threading.Thread(target=update_thread_function, daemon=True)
                             app.update_thread.start()
             
@@ -1881,36 +1911,36 @@ class TelemetryDashboard:
                                 time.sleep(1)
                                 continue
                             
-                            # 即使暂停更新，也继续读取数据，但不发送到GUI
+                            # Even if updates are paused, continue reading data but don't send to GUI
                             # Read telemetry data
                             telemetry_address = base_address + telemetry_offset
                             telemetry_data = memory_reader.read_memory(telemetry_address, TelemetryData)
                             
-                            # 只有在未暂停且窗口存在时才更新GUI
+                            # Only update GUI if not paused and window exists
                             if telemetry_data and root.winfo_exists():
                                 if not hasattr(app, 'pause_updates') or not app.pause_updates:
                                     # Use after method to update GUI from the main thread
                                     root.after(0, lambda td=telemetry_data: app.update_values(td))
                                 else:
-                                    # 即使暂停也更新最后更新时间，防止watchdog重启线程
+                                    # Even if paused, update last update time to prevent watchdog from restarting thread
                                     app.last_update_time = time.time()
                             
-                            # 如果暂停了，可以降低更新频率以减少CPU使用
+                            # If paused, reduce update frequency to reduce CPU usage
                             if hasattr(app, 'pause_updates') and app.pause_updates:
-                                time.sleep(0.1)  # 暂停时降低到约10FPS
+                                time.sleep(0.1)  # Reduce to about 10FPS when paused
                             else:
-                                # 使用用户设置的更新间隔
-                                update_interval = getattr(app, 'update_interval', 0.016)  # 默认约60FPS
+                                # Use user-defined update interval
+                                update_interval = getattr(app, 'update_interval', 0.016)  # Default about 60FPS
                                 time.sleep(update_interval)
                         except Exception as e:
                             print(f"Error in update loop: {e}")
                             import traceback
-                            traceback.print_exc()  # 打印完整的错误堆栈
+                            traceback.print_exc()  # Print full error stack trace
                             time.sleep(0.5)  # Avoid tight error loop
                 except Exception as e:
                     print(f"Critical error in update thread: {e}")
                     import traceback
-                    traceback.print_exc()  # 打印完整的错误堆栈
+                    traceback.print_exc()  # Print full error stack trace
                 finally:
                     if memory_reader:
                         try:
@@ -1927,17 +1957,17 @@ class TelemetryDashboard:
             # Handle window close event
             def on_closing():
                 print("Window closing, shutting down threads...")
-                app.exit_event.set()  # 通知所有线程退出
+                app.exit_event.set()  # Notify all threads to exit
                 app.update_thread_running = False
                 
-                # 销毁游戏内覆盖层
+                # Destroy in-game overlay
                 if hasattr(app, 'overlay') and app.overlay is not None:
                     app.overlay.destroy()
                 
-                # 给线程一些时间来清理
+                # Give threads some time to clean up
                 time.sleep(0.2)
                 
-                # 确保安全销毁窗口
+                # Ensure safe window destruction
                 try:
                     root.destroy()
                 except:
@@ -1947,16 +1977,16 @@ class TelemetryDashboard:
             
             root.protocol("WM_DELETE_WINDOW", on_closing)
             
-            # 设置窗口标题
+            # Set window title
             root.title("RBR Telemetry Dashboard")
             
-            # 启动主循环
+            # Start main loop
             root.mainloop()
             
         except Exception as e:
             print(f"Critical error in main application: {e}")
             import traceback
-            traceback.print_exc()  # 打印完整的错误堆栈
+            traceback.print_exc()  # Print full error stack trace
 
 # Determine the application path and resource path
 if getattr(sys, 'frozen', False):
@@ -2623,7 +2653,7 @@ while True:
                         min(1.0, (max_lock - trigger_threshold) / 50)
                     )
                     # Apply the user's haptic strength setting
-                    final_intensity = max_slip_intensity * haptic_strength
+                    final_intensity = max_slip_intensity * haptic_strength * 0.1
                     
                     # Start wheel slip rumble if not already active
                     if not wheel_slip_rumble_active:
