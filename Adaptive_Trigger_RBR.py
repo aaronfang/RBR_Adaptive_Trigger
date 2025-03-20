@@ -499,7 +499,7 @@ class TelemetryOverlay:
         self.position = "top-right"  # Position: top-left, top-right, bottom-left, bottom-right
         self.padding = 10
         # Adjust window size for water temperature display only
-        self.width = 200
+        self.width = 120
         self.height = 30
         # Save custom position
         self.custom_x = None
@@ -625,6 +625,11 @@ class TelemetryOverlay:
         """Update telemetry data and redraw"""
         if not self.visible or not self.window:
             return
+        
+        # Check if game is still running, hide if not
+        if not is_game_running():
+            self.hide()
+            return
             
         self.telemetry_data = data
         self.redraw()
@@ -660,7 +665,7 @@ class TelemetryOverlay:
             elif water_temp > 95:  # High
                 temp_color = "#FFFF00"  # Yellow
                 
-            temp_text = f"WaterTemp: {water_temp:.1f} °C"
+            temp_text = f"🌡 {water_temp:.1f} °C"
             self.canvas.create_text(
                 self.width // 2, 
                 self.height // 2, 
@@ -2653,7 +2658,7 @@ while True:
                         min(1.0, (max_lock - trigger_threshold) / 50)
                     )
                     # Apply the user's haptic strength setting
-                    final_intensity = max_slip_intensity * haptic_strength * 0.1
+                    final_intensity = max_slip_intensity * haptic_strength * 0.5
                     
                     # Start wheel slip rumble if not already active
                     if not wheel_slip_rumble_active:
