@@ -713,7 +713,7 @@ class TelemetryDashboard:
     def __init__(self, root):
         self.root = root
         self.root.title("RBR Telemetry Dashboard")
-        self.root.geometry("830x460")
+        self.root.geometry("700x470")
         
         # Initialize in-game overlay
         if WINDOWS_API_AVAILABLE:
@@ -959,7 +959,7 @@ class TelemetryDashboard:
         self.always_on_top = tk.BooleanVar(value=False)
         always_on_top_cb = ttk.Checkbutton(
             self.control_panel, 
-            text="Pin Window", 
+            text="Pin", 
             variable=self.always_on_top,
             command=self.toggle_always_on_top,
             style='Theme.TCheckbutton'
@@ -970,7 +970,7 @@ class TelemetryDashboard:
         self.show_title_bar = tk.BooleanVar(value=True)
         title_bar_cb = ttk.Checkbutton(
             self.control_panel,
-            text="Show Title Bar",
+            text="TitleBar",
             variable=self.show_title_bar,
             command=self.toggle_title_bar,
             style='Theme.TCheckbutton'
@@ -980,7 +980,7 @@ class TelemetryDashboard:
         # In-game overlay toggle button
         overlay_cb = ttk.Checkbutton(
             self.control_panel,
-            text="In-game Display",
+            text="Overlay",
             variable=self.show_overlay,
             command=self.toggle_overlay,
             style='Theme.TCheckbutton'
@@ -995,7 +995,7 @@ class TelemetryDashboard:
         # Theme toggle button
         theme_cb = ttk.Checkbutton(
             self.control_panel,
-            text="Dark Theme",
+            text="Dark",
             variable=self.is_dark_theme,
             command=self.toggle_theme,
             style='Theme.TCheckbutton'
@@ -1003,7 +1003,7 @@ class TelemetryDashboard:
         theme_cb.pack(side=tk.LEFT, padx=5)
         
         # Overlay opacity control
-        ttk.Label(self.control_panel, text="Overlay Opacity:", style='Theme.TLabel').pack(side=tk.LEFT, padx=(10, 0))
+        ttk.Label(self.control_panel, text="Opacity:", style='Theme.TLabel').pack(side=tk.LEFT, padx=(10, 0))
         self.opacity_scale = ttk.Scale(
             self.control_panel, 
             from_=0.1, 
