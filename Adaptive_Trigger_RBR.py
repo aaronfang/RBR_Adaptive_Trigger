@@ -2081,10 +2081,10 @@ else:
     }
     # 添加新的配置部分：反馈强度设置
     config['Feedback'] = {
-        'trigger_strength': '1.5',      # 自适应扳机强度系数 (0.1-2.0)
-        'haptic_strength': '0.5',       # Haptic震动反馈强度系数 (0-1.0)
-        'wheel_slip_threshold': '10.0',  # 轮胎侧滑检测的灵敏度。值越小，越容易检测到侧滑。 (1.0-20.0)
-        'trigger_threshold': '10.0'      # 触发Haptic震动的侧滑阈值 (1.0-20.0)
+        'trigger_strength': '2.0',      # 自适应扳机强度系数 (0.1-2.0)
+        'haptic_strength': '1.0',       # Haptic震动反馈强度系数 (0-1.0)
+        'wheel_slip_threshold': '5.0',  # 轮胎侧滑检测的灵敏度。值越小，越容易检测到侧滑。 (1.0-20.0)
+        'trigger_threshold': '5.0'      # 触发Haptic震动的侧滑阈值 (1.0-20.0)
     }
     # 添加GUI设置
     config['GUI'] = {
@@ -2131,11 +2131,11 @@ else:
         configfile.write("gear_up_key = e\n")
         configfile.write("gear_down_key = q\n")
         configfile.write("# 每档升档转速(1->2,2->3,3->4,4->5,5->6,6->7)，逗号分隔，5/6/7档车通用\n")
-        configfile.write("shift_up_rpm = 6000,6300,6500,6800,6800,6500\n")
+        configfile.write("shift_up_rpm = 6800,6500,6300,6000,5800,5500\n")
         configfile.write("# 每档降档转速(2->1,3->2,4->3,5->4,6->5,7->6)，逗号分隔\n")
-        configfile.write("shift_down_rpm = 1500,1800,2000,2200,2500,2800\n")
-        configfile.write("shift_up_cooldown = 0.25\n")
-        configfile.write("shift_down_cooldown = 0.25\n")
+        configfile.write("shift_down_rpm = 2500,2800,3500,4000,4000,4300\n")
+        configfile.write("shift_up_cooldown = 1\n")
+        configfile.write("shift_down_cooldown = 0.5\n")
         configfile.write("gear_shift_debug = False\n")
     
     print(f"Created default configuration file at {config_path}")
