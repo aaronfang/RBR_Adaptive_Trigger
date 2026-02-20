@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 
 block_cipher = None
 
@@ -7,10 +8,9 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('haptics', 'haptics'),  
-        ('icon.ico', '.'),       
-    ],
-    hiddenimports=[],
+        ('haptics', 'haptics'),
+    ] + ([('icon.ico', '.')] if os.path.exists('icon.ico') else []),
+    hiddenimports=['pydirectinput', 'keyboard'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -29,7 +29,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='RBR_DualSense_Adapter',
+    name='RBR_DualSense_Adapter_v1.5',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -42,5 +42,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icon.ico',
+    icon='icon.ico' if os.path.exists('icon.ico') else None,
+    version='version_info.txt',
 )

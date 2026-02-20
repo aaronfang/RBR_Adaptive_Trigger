@@ -1,3 +1,7 @@
+"""
+RBR DualSense Adapter - Richard Burns Rally 自适应扳机与 DualSense 手柄适配
+Version 1.5
+"""
 import socket
 import json
 from enum import Enum
@@ -7,6 +11,16 @@ import os
 import sys
 import configparser
 import psutil  # Add this import for process handling
+
+__version__ = '1.5'
+
+# Keyboard for auto gear shift - use pydirectinput for games (DirectX/DirectInput)
+# keyboard library sends standard Windows messages which games often ignore
+try:
+    import pydirectinput
+    PYDIRECTINPUT_AVAILABLE = True
+except ImportError:
+    PYDIRECTINPUT_AVAILABLE = False
 import math
 import tkinter as tk
 from tkinter import ttk
@@ -22,6 +36,7 @@ try:
     import win32gui
     import win32con
     import win32api
+    import win32process
     WINDOWS_API_AVAILABLE = True
 except ImportError:
     print("Warning: PyWin32 library is not installed. In-game overlay feature will not be available.")
@@ -34,6 +49,45 @@ def get_process_by_name(name):
         if proc.info['name'].lower() == name.lower():
             return proc.info['pid']
     return None
+
+def bring_game_window_to_foreground(process_name="RichardBurnsRally_SSE.exe"):
+    """Bring the game window to foreground so keyboard input reaches it."""
+    if not WINDOWS_API_AVAILABLE:
+        return False
+    try:
+        pid = get_process_by_name(process_name)
+        if not pid:
+            return False
+        target_hwnd = None
+        def enum_callback(hwnd, _):
+            nonlocal target_hwnd
+            if win32gui.IsWindowVisible(hwnd):
+                _, window_pid = win32process.GetWindowThreadProcessId(hwnd)
+                if window_pid == pid:
+                    target_hwnd = hwnd
+                    return False  # Stop enumeration
+            return True
+        win32gui.EnumWindows(enum_callback, None)
+        if target_hwnd:
+            win32gui.SetForegroundWindow(target_hwnd)
+            return True
+    except Exception:
+        pass
+    return False
+
+def is_game_window_focused(process_name="RichardBurnsRally_SSE.exe"):
+    """Check if the game window is the foreground window (has focus)."""
+    if not WINDOWS_API_AVAILABLE:
+        return False
+    try:
+        fg_hwnd = win32gui.GetForegroundWindow()
+        if not fg_hwnd:
+            return False
+        _, window_pid = win32process.GetWindowThreadProcessId(fg_hwnd)
+        game_pid = get_process_by_name(process_name)
+        return game_pid is not None and window_pid == game_pid
+    except Exception:
+        return False
 
 class MemoryReader:
     def __init__(self, process_name="RichardBurnsRally_SSE.exe"):
@@ -2071,6 +2125,18 @@ else:
         configfile.write("[GUI]\n")
         configfile.write("fps = 60.0\n")
         configfile.write("pause_updates = False\n")
+        configfile.write("\n")
+        configfile.write("[GearShift]\n")
+        configfile.write("auto_gear_shift = False\n")
+        configfile.write("gear_up_key = e\n")
+        configfile.write("gear_down_key = q\n")
+        configfile.write("# 每档升档转速(1->2,2->3,3->4,4->5,5->6,6->7)，逗号分隔，5/6/7档车通用\n")
+        configfile.write("shift_up_rpm = 6000,6300,6500,6800,6800,6500\n")
+        configfile.write("# 每档降档转速(2->1,3->2,4->3,5->4,6->5,7->6)，逗号分隔\n")
+        configfile.write("shift_down_rpm = 1500,1800,2000,2200,2500,2800\n")
+        configfile.write("shift_up_cooldown = 0.25\n")
+        configfile.write("shift_down_cooldown = 0.25\n")
+        configfile.write("gear_shift_debug = False\n")
     
     print(f"Created default configuration file at {config_path}")
 
@@ -2093,6 +2159,42 @@ haptic_strength = max(0, min(1.0, haptic_strength))
 wheel_slip_threshold = max(1.0, min(20.0, wheel_slip_threshold))
 trigger_threshold = max(1.0, min(20.0, trigger_threshold))
 
+# 自动换挡配置 - 支持5/6/7档车
+def _parse_rpm_list(config, section, key, default_list, min_rpm=1000, max_rpm=9000):
+    """解析逗号分隔的转速列表，6个值对应1->2至6->7升档，2->1至7->6降档"""
+    try:
+        s = config.get(section, key, fallback=','.join(map(str, default_list)))
+        values = [float(x.strip()) for x in s.split(',') if x.strip()]
+        if len(values) >= 6:
+            return [max(min_rpm, min(max_rpm, v)) for v in values[:6]]
+        result = values + default_list[len(values):]
+        return [max(min_rpm, min(max_rpm, v)) for v in result[:6]]
+    except (ValueError, configparser.Error):
+        return default_list
+
+_default_shift_up = [6000, 6300, 6500, 6800, 6800, 6500]   # 1->2, 2->3, 3->4, 4->5, 5->6, 6->7
+_default_shift_down = [1500, 1800, 2000, 2200, 2500, 2800]  # 2->1, 3->2, 4->3, 5->4, 6->5, 7->6
+
+if config.has_section('GearShift'):
+    auto_gear_shift_enabled = config.getboolean('GearShift', 'auto_gear_shift', fallback=False)
+    gear_up_key = config.get('GearShift', 'gear_up_key', fallback='e')
+    gear_down_key = config.get('GearShift', 'gear_down_key', fallback='q')
+    shift_up_rpm = _parse_rpm_list(config, 'GearShift', 'shift_up_rpm', _default_shift_up, 3000, 9000)
+    shift_down_rpm = _parse_rpm_list(config, 'GearShift', 'shift_down_rpm', _default_shift_down, 1000, 4000)
+    shift_up_cooldown = config.getfloat('GearShift', 'shift_up_cooldown', fallback=config.getfloat('GearShift', 'shift_cooldown', fallback=0.25))
+    shift_down_cooldown = config.getfloat('GearShift', 'shift_down_cooldown', fallback=config.getfloat('GearShift', 'shift_cooldown', fallback=0.25))
+else:
+    auto_gear_shift_enabled = False
+    gear_up_key = 'e'
+    gear_down_key = 'q'
+    shift_up_rpm = _default_shift_up.copy()
+    shift_down_rpm = _default_shift_down.copy()
+    shift_up_cooldown = 0.25
+    shift_down_cooldown = 0.25
+shift_up_cooldown = max(0.1, min(1.0, shift_up_cooldown))
+shift_down_cooldown = max(0.1, min(1.0, shift_down_cooldown))
+gear_shift_debug = config.getboolean('GearShift', 'gear_shift_debug', fallback=False) if config.has_section('GearShift') else False
+
 # Get network settings
 UDP_PORT = config.getint('Network', 'udp_port', fallback=6778)
 
@@ -2101,6 +2203,7 @@ UDP_IP = "127.0.0.1"
 UDP_DSX_PORT = 6969
 
 # Initialize the dashboard if GUI is enabled
+print(f"RBR DualSense Adapter v{__version__}")
 if use_gui_dashboard:
     # Create a separate thread for the Tkinter GUI
     def start_dashboard():
@@ -2114,6 +2217,13 @@ if use_gui_dashboard:
     print("Telemetry dashboard started in GUI mode")
 else:
     print("Telemetry dashboard running in console mode")
+
+if auto_gear_shift_enabled:
+    if PYDIRECTINPUT_AVAILABLE:
+        print(f"Auto gear shift enabled: up={gear_up_key}, down={gear_down_key}, shift_up_rpm={shift_up_rpm}, shift_down_rpm={shift_down_rpm}")
+    else:
+        print("Warning: Auto gear shift enabled but pydirectinput not available. Install with: pip install pydirectinput")
+        auto_gear_shift_enabled = False
 
 # Initialize memory reader
 rbr_memory_reader = None
@@ -2181,6 +2291,11 @@ wheel_slip_rumble_active = False
 
 # Initialize previous gear
 previous_gear = None
+
+# Auto gear shift: last shift time for cooldown (升档/降档分开)
+last_shift_up_time = 0
+last_shift_down_time = 0
+last_gear_shift_debug_time = 0
 
 # Add these new functions and variables
 
@@ -2389,6 +2504,58 @@ while True:
                 # Read FFB value
                 if adress:
                     ffb_value = rbr_memory_reader.read_float(adress)
+                
+                # Auto gear shift: simulate keyboard when RPM conditions are met
+                # Only send when: 1) game window has focus 2) game not paused 3) 比赛已开始(倒计时结束)
+                # stage_start_countdown > 0 表示倒计时中，不自动换挡避免抢跑
+                # gear_id: 0-6 for 7 gears max (5/6/7档车通用)
+                if auto_gear_shift_enabled and 0 <= gear_id <= 6 and stage_start_countdown <= 0:
+                    game_has_focus = WINDOWS_API_AVAILABLE and is_game_window_focused()
+                    game_not_paused = (current_time - last_valid_telemetry_time) <= telemetry_timeout
+                    
+                    # Debug: print status every 2 seconds when in race
+                    if gear_shift_debug and (current_time - last_gear_shift_debug_time) >= 2.0:
+                        last_gear_shift_debug_time = current_time
+                        reasons = []
+                        if not PYDIRECTINPUT_AVAILABLE:
+                            reasons.append("pydirectinput模块未安装")
+                        elif not game_has_focus:
+                            reasons.append("游戏窗口未聚焦")
+                        elif not game_not_paused:
+                            reasons.append("游戏已暂停")
+                        elif clutch >= 20:
+                            reasons.append(f"离合踩下{clutch:.0f}%")
+                        elif gear_id < len(shift_up_rpm) and rpm >= shift_up_rpm[gear_id] and (current_time - last_shift_up_time) < shift_up_cooldown:
+                            reasons.append("升档冷却中")
+                        elif gear_id > 0 and gear_id <= len(shift_down_rpm) and rpm <= shift_down_rpm[gear_id - 1] and (current_time - last_shift_down_time) < shift_down_cooldown:
+                            reasons.append("降档冷却中")
+                        elif gear_id < len(shift_up_rpm) and rpm >= shift_up_rpm[gear_id]:
+                            reasons.append("应升档")
+                        elif gear_id > 0 and gear_id <= len(shift_down_rpm) and rpm <= shift_down_rpm[gear_id - 1]:
+                            reasons.append("应降档")
+                        else:
+                            up_r = shift_up_rpm[gear_id] if gear_id < len(shift_up_rpm) else 0
+                            down_r = shift_down_rpm[gear_id - 1] if gear_id > 0 and gear_id <= len(shift_down_rpm) else 0
+                            reasons.append(f"rpm={rpm:.0f} gear={gear_id} (升档>={up_r}, 降档<={down_r})")
+                        print(f"[AutoGear] game_state={game_state_id} rpm={rpm:.0f} gear={gear_id} clutch={clutch:.0f}% focus={game_has_focus} | {' | '.join(reasons)}")
+                    
+                    if PYDIRECTINPUT_AVAILABLE and game_has_focus and game_not_paused and clutch < 20:
+                        # Shift up: gear_id 0-5 可升档 (5档车0-3, 6档车0-4, 7档车0-5)
+                        if (gear_id < len(shift_up_rpm) and rpm >= shift_up_rpm[gear_id] and
+                            (current_time - last_shift_up_time) >= shift_up_cooldown):
+                            try:
+                                pydirectinput.press(gear_up_key)
+                                last_shift_up_time = current_time
+                            except Exception as e:
+                                print(f"Auto gear shift up error: {e}")
+                        # Shift down: gear_id 1-6 可降档
+                        elif (gear_id > 0 and gear_id <= len(shift_down_rpm) and rpm <= shift_down_rpm[gear_id - 1] and
+                              (current_time - last_shift_down_time) >= shift_down_cooldown):
+                            try:
+                                pydirectinput.press(gear_down_key)
+                                last_shift_down_time = current_time
+                            except Exception as e:
+                                print(f"Auto gear shift down error: {e}")
                 
                 # Print debug info or update dashboard
                 current_time = time.time()

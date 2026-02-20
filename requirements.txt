@@ -3,4 +3,5 @@ pywin32>=305
 matplotlib>=3.4.0
 pillow>=8.0.0
 psutil>=5.8.0
-keyboard>=0.13.5 
+keyboard>=0.13.5
+pydirectinput>=1.0.4
