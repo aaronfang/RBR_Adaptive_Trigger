@@ -2914,8 +2914,11 @@ while True:
                 max_lock = min(rl_slip, rr_slip)
                 right_strength = min(8, 2 + abs(max_lock) / 10) * trigger_strength  # 应用配置的强度系数
 
-        packet.instructions.append(Instruction(InstructionType.TriggerUpdate, [0, Trigger.Left, left_mode, left_strength, 0, 0]))
-        packet.instructions.append(Instruction(InstructionType.TriggerUpdate, [0, Trigger.Right, right_mode, right_strength, 0, 0]))
+        # v2-55+ requires integer parameters; float causes std::bad_any_cast in HandleTriggerUpdate
+        left_strength_int = max(1, min(8, int(round(left_strength))))
+        right_strength_int = max(1, min(8, int(round(right_strength))))
+        packet.instructions.append(Instruction(InstructionType.TriggerUpdate, [0, Trigger.Left, left_mode, left_strength_int, 0, 0]))
+        packet.instructions.append(Instruction(InstructionType.TriggerUpdate, [0, Trigger.Right, right_mode, right_strength_int, 0, 0]))
 
     ###################################################################################
     # LED Effect
