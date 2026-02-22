@@ -1,6 +1,6 @@
 """
 RBR DualSense Adapter - Richard Burns Rally 自适应扳机与 DualSense 手柄适配
-Version 1.5.1
+Version 1.5.2
 """
 import socket
 import json
@@ -12,7 +12,7 @@ import sys
 import configparser
 import psutil  # Add this import for process handling
 
-__version__ = '1.5.1'
+__version__ = '1.5.2'
 
 # pydirectinput for game key simulation; keyboard for global hotkey (preset switch)
 try:
@@ -2188,17 +2188,25 @@ else:
         configfile.write("gear_shift_debug = False\n")
         configfile.write("\n")
         configfile.write("[GearShift_Rally1]\n")
+        configfile.write("# 每档升档转速(1->2,2->3,3->4,4->5,5->6,6->7)，逗号分隔，5/6/7档车通用\n")
         configfile.write("shift_up_rpm = 8000,7800,6900,6800,6800,6800\n")
+        configfile.write("# 每档降档转速(2->1,3->2,4->3,5->4,6->5,7->6)，逗号分隔\n")
         configfile.write("shift_down_rpm = 3000,3500,4500,4500,5000,5000\n")
         configfile.write("\n")
         configfile.write("[GearShift_Rally2]\n")
+        configfile.write("# 每档升档转速(1->2,2->3,3->4,4->5,5->6,6->7)，逗号分隔，5/6/7档车通用\n")
         configfile.write("shift_up_rpm = 6800,6500,6300,6000,5800,5500\n")
+        configfile.write("# 每档降档转速(2->1,3->2,4->3,5->4,6->5,7->6)，逗号分隔\n")
         configfile.write("shift_down_rpm = 2500,2800,3500,4000,4000,4300\n")
         configfile.write("\n")
         configfile.write("[GearShift_Rally3]\n")
+        configfile.write("# 每档升档转速(1->2,2->3,3->4,4->5,5->6,6->7)，逗号分隔，5/6/7档车通用\n")
         configfile.write("shift_up_rpm = 9500,9400,9400,9400,9400,9400\n")
+        configfile.write("# 每档降档转速(2->1,3->2,4->3,5->4,6->5,7->6)，逗号分隔\n")
         configfile.write("shift_down_rpm = 6000,6300,6500,6800,7000,7000\n")
     
+    # 必须将刚写入的默认配置读回 config 对象，否则后续 save_config() 会覆盖掉 GearShift_Rally* 档位转速
+    config.read(config_path)
     print(f"Created default configuration file at {config_path}")
 
 # Get feature settings

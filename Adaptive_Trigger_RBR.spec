@@ -29,7 +29,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='RBR_DualSense_Adapter_v1.5.1',
+    name='RBR_DualSense_Adapter_v1.5.2',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
