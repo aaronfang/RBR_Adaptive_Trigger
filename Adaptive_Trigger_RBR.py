@@ -743,14 +743,22 @@ class TelemetryOverlay:
     def load_position(self, config):
         """Load position from configuration"""
         if 'UI' in config and 'overlay_x' in config['UI'] and 'overlay_y' in config['UI']:
-            try:
-                self.custom_x = int(config['UI']['overlay_x'])
-                self.custom_y = int(config['UI']['overlay_y'])
-                print(f"Loaded floating window position: x={self.custom_x}, y={self.custom_y}")
-            except (ValueError, TypeError):
+            overlay_x_str = config['UI']['overlay_x'].strip()
+            overlay_y_str = config['UI']['overlay_y'].strip()
+            # Check if values are not empty
+            if overlay_x_str and overlay_y_str:
+                try:
+                    self.custom_x = int(overlay_x_str)
+                    self.custom_y = int(overlay_y_str)
+                    print(f"Loaded floating window position: x={self.custom_x}, y={self.custom_y}")
+                except (ValueError, TypeError):
+                    self.custom_x = None
+                    self.custom_y = None
+                    print("Floating window position format error, using default position")
+            else:
                 self.custom_x = None
                 self.custom_y = None
-                print("Floating window position format error, using default position")
+                print("Overlay position not set, using default position")
         else:
             self.custom_x = None
             self.custom_y = None
@@ -2113,7 +2121,7 @@ config = configparser.ConfigParser()
 
 # Check if external config file exists, if not use the default one
 if os.path.exists(config_path):
-    config.read(config_path)
+    config.read(config_path, encoding='utf-8')
 else:
     # Use default configuration
     config['Features'] = {
@@ -2206,7 +2214,7 @@ else:
         configfile.write("shift_down_rpm = 6000,6300,6500,6800,7000,7000\n")
     
     # 必须将刚写入的默认配置读回 config 对象，否则后续 save_config() 会覆盖掉 GearShift_Rally* 档位转速
-    config.read(config_path)
+    config.read(config_path, encoding='utf-8')
     print(f"Created default configuration file at {config_path}")
 
 # Get feature settings
@@ -2318,7 +2326,7 @@ def reload_config_if_changed():
         mtime = os.path.getmtime(config_path)
         if mtime != last_config_mtime:
             last_config_mtime = mtime
-            config.read(config_path)
+            config.read(config_path, encoding='utf-8')
             adaptive_trigger_enabled = config.getboolean('Features', 'adaptive_trigger', fallback=True)
             led_effect_enabled = config.getboolean('Features', 'led_effect', fallback=True)
             haptic_effect_enabled = config.getboolean('Features', 'haptic_effect', fallback=True)

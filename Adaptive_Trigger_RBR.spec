@@ -10,7 +10,7 @@ a = Analysis(
     datas=[
         ('haptics', 'haptics'),
     ] + ([('icon.ico', '.')] if os.path.exists('icon.ico') else []),
-    hiddenimports=['pydirectinput', 'keyboard'],
+    hiddenimports=['pydirectinput', 'keyboard', 'psutil', 'win32gui', 'win32con', 'win32api', 'win32process'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
