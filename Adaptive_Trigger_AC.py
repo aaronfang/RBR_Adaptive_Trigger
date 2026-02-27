@@ -37,16 +37,6 @@ except ImportError:
     WINDOWS_API_AVAILABLE = False
 
 ###################################################################################
-# Path Helper (for packaged exe)
-###################################################################################
-
-def get_app_dir():
-    """获取应用程序所在目录（支持 PyInstaller 打包）"""
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
-
-###################################################################################
 # AC Shared Memory Data Structures
 ###################################################################################
 
@@ -346,11 +336,11 @@ DEFAULT_CONFIG = {
         'haptic_effect': 'False',
     },
     'Feedback': {
-        'trigger_strength': '1.5',        # 扳机强度系数 (0.1-5.0)
-        'wheel_slip_threshold': '0.15',   # 打滑阈值
+        'trigger_strength': '5.00',       # 扳机强度系数 (0.1-5.0)
+        'wheel_slip_threshold': '0.500',  # 打滑阈值
         'trigger_threshold': '0.20',      # 扳机触发阈值
-        'vibration_mode': 'pulse',        # pulse=脉冲(11) / continuous=连续(8) 连续模式通常更强烈
-        'max_strength_override': '0',     # 0=使用DSX标准(1-8) / 255=实验性尝试硬件最大值
+        'vibration_mode': 'continuous',   # pulse=脉冲(11) / continuous=连续(8) 连续模式通常更强烈
+        'max_strength_override': '255',   # 0=使用DSX标准(1-8) / 255=实验性尝试硬件最大值
     },
     'GUI': {
         'fps': '60.0',
@@ -363,8 +353,8 @@ DEFAULT_CONFIG = {
     }
 }
 
-# 加载配置（配置文件放在 exe/脚本 同目录）
-config_file = os.path.join(get_app_dir(), 'config_ac.ini')
+# 加载配置
+config_file = 'config_ac.ini'
 config = configparser.ConfigParser()
 
 if os.path.exists(config_file):
@@ -385,15 +375,15 @@ adaptive_trigger_enabled = config.getboolean('Features', 'adaptive_trigger', fal
 led_effect_enabled = config.getboolean('Features', 'led_effect', fallback=True)
 haptic_effect_enabled = config.getboolean('Features', 'haptic_effect', fallback=False)
 
-trigger_strength = config.getfloat('Feedback', 'trigger_strength', fallback=1.5)
-wheel_slip_threshold = config.getfloat('Feedback', 'wheel_slip_threshold', fallback=0.15)
+trigger_strength = config.getfloat('Feedback', 'trigger_strength', fallback=5.00)
+wheel_slip_threshold = config.getfloat('Feedback', 'wheel_slip_threshold', fallback=0.500)
 trigger_threshold = config.getfloat('Feedback', 'trigger_threshold', fallback=0.20)
-vibration_mode = config.get('Feedback', 'vibration_mode', fallback='pulse')  # pulse / continuous
-max_strength_override = int(config.get('Feedback', 'max_strength_override', fallback='0'))
+vibration_mode = config.get('Feedback', 'vibration_mode', fallback='continuous')  # pulse / continuous
+max_strength_override = int(config.get('Feedback', 'max_strength_override', fallback='255'))
 
 # 确保参数在合理范围内
 trigger_strength = max(0.1, min(5.0, trigger_strength))
-wheel_slip_threshold = max(0.05, min(0.5, wheel_slip_threshold))
+wheel_slip_threshold = max(0.05, min(1.0, wheel_slip_threshold))
 trigger_threshold = max(0.1, min(0.5, trigger_threshold))
 
 # LED颜色阈值
@@ -693,7 +683,7 @@ class ACTelemetryDashboard:
         slip_scale = ttk.Scale(
             params_frame,
             from_=0.05,
-            to=0.5,
+            to=1.0,
             variable=self.wheel_slip_threshold,
             orient=tk.HORIZONTAL,
             command=self.on_parameter_change
@@ -824,21 +814,22 @@ class ACTelemetryDashboard:
         gas = physics_data.gas
         brake = physics_data.brake
         
-        # 计算前后轮平均打滑
+        # 计算前后轮打滑 (max兼容前驱/后驱/四驱)
         front_slip = (abs(wheel_slip[0]) + abs(wheel_slip[1])) / 2
         rear_slip = (abs(wheel_slip[2]) + abs(wheel_slip[3])) / 2
+        max_slip = max(front_slip, rear_slip)
         
         status_text = "Normal"
         status_color = "green"
         
-        # 检查后轮打滑(油门扳机)
-        if gas > 0.3 and rear_slip > wheel_slip_threshold:
-            status_text = f"Rear Slip! (R2 Feedback: {min(rear_slip * 10, 1.0):.2f})"
+        # 油门过大导致滑移(右扳机)
+        if gas > 0.3 and max_slip > wheel_slip_threshold:
+            status_text = f"Throttle Slip! (R2: {min(max_slip * 10, 1.0):.2f})"
             status_color = "red"
         
-        # 检查前轮抱死(刹车扳机)
-        elif brake > 0.3 and front_slip > wheel_slip_threshold:
-            status_text = f"Front Lock! (L2 Feedback: {min(front_slip * 10, 1.0):.2f})"
+        # 刹车抱死导致滑移(左扳机)
+        elif brake > 0.3 and max_slip > wheel_slip_threshold:
+            status_text = f"Brake Lock! (L2: {min(max_slip * 10, 1.0):.2f})"
             status_color = "red"
         
         self.trigger_status_label.config(text=status_text, foreground=status_color)
@@ -933,17 +924,20 @@ def main_telemetry_loop(app, root):
                     # 计算前后轮打滑
                     front_slip = (abs(wheel_slip[0]) + abs(wheel_slip[1])) / 2
                     rear_slip = (abs(wheel_slip[2]) + abs(wheel_slip[3])) / 2
+                    # 折中方案: 取前后轮较大值, 兼容前驱/后驱/四驱
+                    # 前驱:油门过大会前轮打滑 | 后驱:后轮打滑 | 四驱:任一轴打滑
+                    max_slip = max(front_slip, rear_slip)
                     
-                    # 更激进的强度公式: 4 + slip*50 使低打滑时也能达到较高强度
-                    # 检查前轮锁死(刹车扳机 - L2)
-                    if physics.brake > 0.3 and front_slip > wheel_slip_threshold:
+                    # 强度公式: 2 + slip*30 (打滑较小时强度偏低)
+                    # 左扳机(L2): 刹车抱死导致滑移 - 任意轮抱死
+                    if physics.brake > 0.3 and max_slip > wheel_slip_threshold:
                         left_mode = vib_mode
-                        left_strength = min(max_strength, 4 + front_slip * 50) * trigger_strength
+                        left_strength = min(max_strength, 2 + max_slip * 30) * trigger_strength
                     
-                    # 检查后轮打滑(油门扳机 - R2)
-                    if physics.gas > 0.3 and rear_slip > wheel_slip_threshold:
+                    # 右扳机(R2): 油门过大导致滑移 - 任意驱动轮打滑
+                    if physics.gas > 0.3 and max_slip > wheel_slip_threshold:
                         right_mode = vib_mode
-                        right_strength = min(max_strength, 4 + rear_slip * 50) * trigger_strength
+                        right_strength = min(max_strength, 2 + max_slip * 30) * trigger_strength
                 
                 # 转换为整数, 实验模式下可发送最高255
                 left_strength_int = max(1, min(max_strength, int(round(left_strength))))
