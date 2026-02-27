@@ -43,15 +43,29 @@
 
 ### 前置要求
 
-1. **Python 3.7+**
-2. **DSX (DualSenseX)** - DualSense手柄驱动程序
+1. **DSX (DualSenseX)** - DualSense手柄驱动程序
    - 下载: [DSX GitHub](https://github.com/Paliverse/DualSenseX)
    - 启动DSX并确保UDP服务器运行在 `127.0.0.1:6969`
 
-3. **Python依赖库**:
+2. **Python** (仅源码运行需要): Python 3.7+
+   - 依赖: `pip install -r requirements.txt`
+
+### 打包分发给其他用户
+
+开发者可使用 PyInstaller 打包为独立 exe，用户无需安装 Python:
+
 ```bash
-pip install psutil numpy matplotlib pywin32
+# 运行打包脚本
+Build_AC_Adapter.bat
+
+# 或手动打包
+pip install pyinstaller
+pyinstaller Adaptive_Trigger_AC.spec
 ```
+
+打包完成后，将 `dist` 文件夹中的以下文件分发给用户:
+- `AC_DualSense_Adapter_v1.0.0.exe` - 主程序
+- `config_ac.ini` - 配置文件（首次运行会自动创建，也可手动复制）
 
 ### 使用步骤
 
@@ -64,9 +78,8 @@ pip install psutil numpy matplotlib pywin32
    - 进入赛道开始驾驶
 
 3. **运行适配器**
-```bash
-python Adaptive_Trigger_AC.py
-```
+   - **方式A (已打包)**: 双击 `AC_DualSense_Adapter_v1.0.0.exe`，无需安装 Python
+   - **方式B (源码)**: `python Adaptive_Trigger_AC.py`
 
 4. **享受游戏!**
    - 自适应扳机会自动工作

@@ -37,6 +37,16 @@ except ImportError:
     WINDOWS_API_AVAILABLE = False
 
 ###################################################################################
+# Path Helper (for packaged exe)
+###################################################################################
+
+def get_app_dir():
+    """获取应用程序所在目录（支持 PyInstaller 打包）"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+###################################################################################
 # AC Shared Memory Data Structures
 ###################################################################################
 
@@ -336,9 +346,11 @@ DEFAULT_CONFIG = {
         'haptic_effect': 'False',
     },
     'Feedback': {
-        'trigger_strength': '1.5',        # 扳机强度系数 (0.1-3.0)
+        'trigger_strength': '1.5',        # 扳机强度系数 (0.1-5.0)
         'wheel_slip_threshold': '0.15',   # 打滑阈值
         'trigger_threshold': '0.20',      # 扳机触发阈值
+        'vibration_mode': 'pulse',        # pulse=脉冲(11) / continuous=连续(8) 连续模式通常更强烈
+        'max_strength_override': '0',     # 0=使用DSX标准(1-8) / 255=实验性尝试硬件最大值
     },
     'GUI': {
         'fps': '60.0',
@@ -351,8 +363,8 @@ DEFAULT_CONFIG = {
     }
 }
 
-# 加载配置
-config_file = 'config_ac.ini'
+# 加载配置（配置文件放在 exe/脚本 同目录）
+config_file = os.path.join(get_app_dir(), 'config_ac.ini')
 config = configparser.ConfigParser()
 
 if os.path.exists(config_file):
@@ -376,9 +388,11 @@ haptic_effect_enabled = config.getboolean('Features', 'haptic_effect', fallback=
 trigger_strength = config.getfloat('Feedback', 'trigger_strength', fallback=1.5)
 wheel_slip_threshold = config.getfloat('Feedback', 'wheel_slip_threshold', fallback=0.15)
 trigger_threshold = config.getfloat('Feedback', 'trigger_threshold', fallback=0.20)
+vibration_mode = config.get('Feedback', 'vibration_mode', fallback='pulse')  # pulse / continuous
+max_strength_override = int(config.get('Feedback', 'max_strength_override', fallback='0'))
 
 # 确保参数在合理范围内
-trigger_strength = max(0.1, min(3.0, trigger_strength))
+trigger_strength = max(0.1, min(5.0, trigger_strength))
 wheel_slip_threshold = max(0.05, min(0.5, wheel_slip_threshold))
 trigger_threshold = max(0.1, min(0.5, trigger_threshold))
 
@@ -419,6 +433,8 @@ class ACTelemetryDashboard:
         self.trigger_strength = tk.DoubleVar(value=trigger_strength)
         self.wheel_slip_threshold = tk.DoubleVar(value=wheel_slip_threshold)
         self.trigger_threshold = tk.DoubleVar(value=trigger_threshold)
+        self.vibration_mode = tk.StringVar(value=vibration_mode)
+        self.max_strength_override = tk.IntVar(value=max_strength_override)
         
         # 功能开关
         self.adaptive_trigger_enabled = tk.BooleanVar(value=adaptive_trigger_enabled)
@@ -642,12 +658,12 @@ class ACTelemetryDashboard:
         params_frame = ttk.Frame(frame)
         params_frame.pack(fill=tk.X, pady=5)
         
-        # 扳机强度
+        # 扳机强度 (扩展至5.0以获得更强震动)
         ttk.Label(params_frame, text="Trigger Strength:").grid(row=0, column=0, sticky="w", padx=5)
         trigger_scale = ttk.Scale(
             params_frame,
             from_=0.1,
-            to=3.0,
+            to=5.0,
             variable=self.trigger_strength,
             orient=tk.HORIZONTAL,
             command=self.on_parameter_change
@@ -655,6 +671,22 @@ class ACTelemetryDashboard:
         trigger_scale.grid(row=0, column=1, sticky="ew", padx=5)
         self.trigger_value_label = ttk.Label(params_frame, text=f"{self.trigger_strength.get():.1f}")
         self.trigger_value_label.grid(row=0, column=2, padx=5)
+        
+        # 震动模式: 连续模式通常比脉冲更强烈
+        ttk.Label(params_frame, text="Vibration Mode:").grid(row=2, column=0, sticky="w", padx=5)
+        vib_mode_combo = ttk.Combobox(params_frame, textvariable=self.vibration_mode, 
+                                      values=["pulse", "continuous"], state="readonly", width=12)
+        vib_mode_combo.grid(row=2, column=1, sticky="w", padx=5)
+        vib_mode_combo.bind("<<ComboboxSelected>>", self.on_parameter_change)
+        
+        # 实验性: 最大强度覆盖 (尝试发送255以获得硬件最大震动)
+        self.max_strength_var = tk.BooleanVar(value=(max_strength_override == 255))
+        ttk.Checkbutton(
+            params_frame,
+            text="Experimental: Max Strength (255)",
+            variable=self.max_strength_var,
+            command=self.on_parameter_change
+        ).grid(row=3, column=0, columnspan=2, sticky="w", padx=5)
         
         # 打滑阈值
         ttk.Label(params_frame, text="Slip Threshold:").grid(row=1, column=0, sticky="w", padx=5)
@@ -682,6 +714,7 @@ class ACTelemetryDashboard:
         """保存配置"""
         global adaptive_trigger_enabled, led_effect_enabled, haptic_effect_enabled
         global trigger_strength, wheel_slip_threshold, trigger_threshold
+        global vibration_mode, max_strength_override
         
         # 更新全局变量
         adaptive_trigger_enabled = self.adaptive_trigger_enabled.get()
@@ -690,6 +723,8 @@ class ACTelemetryDashboard:
         trigger_strength = self.trigger_strength.get()
         wheel_slip_threshold = self.wheel_slip_threshold.get()
         trigger_threshold = self.trigger_threshold.get()
+        vibration_mode = self.vibration_mode.get()
+        max_strength_override = 255 if self.max_strength_var.get() else 0
         
         # 保存到配置文件
         config['Features']['adaptive_trigger'] = str(adaptive_trigger_enabled)
@@ -698,6 +733,8 @@ class ACTelemetryDashboard:
         config['Feedback']['trigger_strength'] = f"{trigger_strength:.2f}"
         config['Feedback']['wheel_slip_threshold'] = f"{wheel_slip_threshold:.3f}"
         config['Feedback']['trigger_threshold'] = f"{trigger_threshold:.3f}"
+        config['Feedback']['vibration_mode'] = vibration_mode
+        config['Feedback']['max_strength_override'] = str(max_strength_override)
         
         with open(config_file, 'w') as f:
             config.write(f)
@@ -885,6 +922,10 @@ def main_telemetry_loop(app, root):
                 left_strength = 1 * trigger_strength
                 right_strength = 1 * trigger_strength
                 
+                # 选择震动模式: continuous=连续震动(通常更强烈) / pulse=脉冲震动
+                vib_mode = TriggerMode.VibrateTrigger if vibration_mode == 'continuous' else TriggerMode.VibrateTriggerPulse
+                max_strength = 255 if max_strength_override == 255 else 8
+                
                 # 只在车辆运动时应用效果
                 if physics.speedKmh > 5:
                     wheel_slip = physics.wheelSlip
@@ -893,19 +934,20 @@ def main_telemetry_loop(app, root):
                     front_slip = (abs(wheel_slip[0]) + abs(wheel_slip[1])) / 2
                     rear_slip = (abs(wheel_slip[2]) + abs(wheel_slip[3])) / 2
                     
+                    # 更激进的强度公式: 4 + slip*50 使低打滑时也能达到较高强度
                     # 检查前轮锁死(刹车扳机 - L2)
                     if physics.brake > 0.3 and front_slip > wheel_slip_threshold:
-                        left_mode = TriggerMode.VibrateTriggerPulse
-                        left_strength = min(8, 2 + front_slip * 30) * trigger_strength
+                        left_mode = vib_mode
+                        left_strength = min(max_strength, 4 + front_slip * 50) * trigger_strength
                     
                     # 检查后轮打滑(油门扳机 - R2)
                     if physics.gas > 0.3 and rear_slip > wheel_slip_threshold:
-                        right_mode = TriggerMode.VibrateTriggerPulse
-                        right_strength = min(8, 2 + rear_slip * 30) * trigger_strength
+                        right_mode = vib_mode
+                        right_strength = min(max_strength, 4 + rear_slip * 50) * trigger_strength
                 
-                # 转换为整数
-                left_strength_int = max(1, min(8, int(round(left_strength))))
-                right_strength_int = max(1, min(8, int(round(right_strength))))
+                # 转换为整数, 实验模式下可发送最高255
+                left_strength_int = max(1, min(max_strength, int(round(left_strength))))
+                right_strength_int = max(1, min(max_strength, int(round(right_strength))))
                 
                 packet.instructions.append(
                     Instruction(InstructionType.TriggerUpdate.value, 
