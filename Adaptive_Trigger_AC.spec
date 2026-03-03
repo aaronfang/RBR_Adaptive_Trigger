@@ -11,7 +11,7 @@ a = Analysis(
     ['Adaptive_Trigger_AC.py'],
     pathex=[],
     binaries=[],
-    datas=([('icon.ico', '.')] if os.path.exists('icon.ico') else []),
+    datas=([('iconAC.ico', '.')] if os.path.exists('iconAC.ico') else []),
     hiddenimports=[
         'pydirectinput', 'keyboard', 'psutil',
         'win32gui', 'win32con', 'win32api', 'win32process',
@@ -48,6 +48,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icon.ico' if os.path.exists('icon.ico') else None,
+    icon='iconAC.ico' if os.path.exists('iconAC.ico') else None,
     version='version_info_ac.txt',
 )

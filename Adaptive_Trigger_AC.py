@@ -401,14 +401,14 @@ class ACTelemetryDashboard:
     def __init__(self, root):
         self.root = root
         self.root.title("AC DualSense Adapter - Assetto Corsa Series")
-        self.root.geometry("800x600")
+        self.root.geometry("800x627")
         
         # 设置窗口图标
         try:
             if getattr(sys, 'frozen', False):
-                icon_path = os.path.join(sys._MEIPASS, "icon.ico")
+                icon_path = os.path.join(sys._MEIPASS, "iconAC.ico")
             else:
-                icon_path = "icon.ico"
+                icon_path = "iconAC.ico"
             
             if os.path.exists(icon_path):
                 self.root.iconbitmap(icon_path)
