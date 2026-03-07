@@ -3101,8 +3101,9 @@ while True:
                 # 检查前后轮是否超过阈值
                 if front_slip > brake_front_slip_threshold or rear_slip > brake_rear_slip_threshold:
                     # 计算滑移系数 (RBR适配版本)
-                    front_slip_coef = front_slip / 5.0   # RBR滑移率量级较大，归一化
-                    rear_slip_coef = rear_slip / 5.0
+                    # 使用更大的除数让percentage分布更合理，支持低频到高频的完整范围
+                    front_slip_coef = front_slip / 25.0   # 调整归一化系数
+                    rear_slip_coef = rear_slip / 25.0
                     
                     # 计算总百分比 (0-1)
                     percentage = (front_slip_coef + rear_slip_coef) / 2.0
@@ -3132,8 +3133,9 @@ while True:
                 # 检查前后轮是否超过阈值
                 if front_slip > throttle_front_slip_threshold or rear_slip > throttle_rear_slip_threshold:
                     # 计算滑移系数 (RBR适配版本)
-                    front_slip_coef = front_slip / 5.0   # RBR滑移率量级较大，归一化
-                    rear_slip_coef = rear_slip / 5.0
+                    # 使用更大的除数让percentage分布更合理，支持低频到高频的完整范围
+                    front_slip_coef = front_slip / 25.0   # 调整归一化系数
+                    rear_slip_coef = rear_slip / 25.0
                     
                     # 计算总百分比 (0-1)
                     percentage = (front_slip_coef + rear_slip_coef) / 2.0
