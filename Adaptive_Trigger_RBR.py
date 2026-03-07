@@ -828,11 +828,29 @@ class TelemetryDashboard:
         self.title_font = tkfont.Font(family="Arial", size=12, weight="bold")
         self.value_font = tkfont.Font(family="Arial", size=11)
         
-        # Add feedback strength parameter
+        # 传统参数变量（向后兼容）
         self.trigger_strength = tk.DoubleVar(value=trigger_strength)
         self.haptic_strength = tk.DoubleVar(value=haptic_strength)
         self.wheel_slip_threshold = tk.DoubleVar(value=wheel_slip_threshold)
         self.trigger_threshold = tk.DoubleVar(value=trigger_threshold)
+        
+        # 刹车滑移参数变量 (Brake Slip)
+        self.brake_threshold = tk.DoubleVar(value=brake_threshold)
+        self.brake_front_slip_threshold = tk.DoubleVar(value=brake_front_slip_threshold)
+        self.brake_rear_slip_threshold = tk.DoubleVar(value=brake_rear_slip_threshold)
+        self.brake_feedback_strength = tk.IntVar(value=brake_feedback_strength)
+        self.brake_amplitude = tk.IntVar(value=brake_amplitude)
+        self.brake_min_frequency = tk.IntVar(value=brake_min_frequency)
+        self.brake_max_frequency = tk.IntVar(value=brake_max_frequency)
+        
+        # 油门滑移参数变量 (Throttle Slip)
+        self.throttle_threshold = tk.DoubleVar(value=throttle_threshold)
+        self.throttle_front_slip_threshold = tk.DoubleVar(value=throttle_front_slip_threshold)
+        self.throttle_rear_slip_threshold = tk.DoubleVar(value=throttle_rear_slip_threshold)
+        self.throttle_feedback_strength = tk.IntVar(value=throttle_feedback_strength)
+        self.throttle_amplitude = tk.IntVar(value=throttle_amplitude)
+        self.throttle_min_frequency = tk.IntVar(value=throttle_min_frequency)
+        self.throttle_max_frequency = tk.IntVar(value=throttle_max_frequency)
         
         # Add feature toggle variables
         self.adaptive_trigger_enabled = tk.BooleanVar(value=adaptive_trigger_enabled)
@@ -1162,10 +1180,56 @@ class TelemetryDashboard:
         separator = ttk.Separator(content, orient="horizontal")
         separator.grid(row=2, column=0, sticky="ew", padx=5, pady=10)
         
+        # 创建Notebook (标签页) 用于新的参数设置
+        notebook = ttk.Notebook(content)
+        notebook.grid(row=3, column=0, sticky="ew", padx=5, pady=5)
+        
+        # === Brake Slip 标签页 ===
+        brake_frame = ttk.Frame(notebook, style='Theme.TFrame')
+        notebook.add(brake_frame, text="Brake Slip")
+        
+        row_idx = 0
+        self._create_rbr_slider(brake_frame, row_idx, "Brake Threshold:", self.brake_threshold, 0.1, 99.0, "%.1f", "%")
+        row_idx += 1
+        self._create_rbr_slider(brake_frame, row_idx, "Front Slip Threshold:", self.brake_front_slip_threshold, 1.0, 20.0, "%.1f", "")
+        row_idx += 1
+        self._create_rbr_slider(brake_frame, row_idx, "Rear Slip Threshold:", self.brake_rear_slip_threshold, 1.0, 20.0, "%.1f", "")
+        row_idx += 1
+        self._create_rbr_slider(brake_frame, row_idx, "Feedback Strength:", self.brake_feedback_strength, 1, 8, "%d", "")
+        row_idx += 1
+        self._create_rbr_slider(brake_frame, row_idx, "Amplitude:", self.brake_amplitude, 1, 8, "%d", "")
+        row_idx += 1
+        self._create_rbr_slider(brake_frame, row_idx, "Min Frequency:", self.brake_min_frequency, 1, 50, "%d", " Hz")
+        row_idx += 1
+        self._create_rbr_slider(brake_frame, row_idx, "Max Frequency:", self.brake_max_frequency, 20, 150, "%d", " Hz")
+        
+        # === Throttle Slip 标签页 ===
+        throttle_frame = ttk.Frame(notebook, style='Theme.TFrame')
+        notebook.add(throttle_frame, text="Throttle Slip")
+        
+        row_idx = 0
+        self._create_rbr_slider(throttle_frame, row_idx, "Throttle Threshold:", self.throttle_threshold, 0.1, 99.0, "%.1f", "%")
+        row_idx += 1
+        self._create_rbr_slider(throttle_frame, row_idx, "Front Slip Threshold:", self.throttle_front_slip_threshold, 1.0, 20.0, "%.1f", "")
+        row_idx += 1
+        self._create_rbr_slider(throttle_frame, row_idx, "Rear Slip Threshold:", self.throttle_rear_slip_threshold, 1.0, 20.0, "%.1f", "")
+        row_idx += 1
+        self._create_rbr_slider(throttle_frame, row_idx, "Feedback Strength:", self.throttle_feedback_strength, 1, 8, "%d", "")
+        row_idx += 1
+        self._create_rbr_slider(throttle_frame, row_idx, "Amplitude:", self.throttle_amplitude, 1, 8, "%d", "")
+        row_idx += 1
+        self._create_rbr_slider(throttle_frame, row_idx, "Min Frequency:", self.throttle_min_frequency, 1, 50, "%d", " Hz")
+        row_idx += 1
+        self._create_rbr_slider(throttle_frame, row_idx, "Max Frequency:", self.throttle_max_frequency, 20, 150, "%d", " Hz")
+        
+        # === Legacy 标签页 (传统参数) ===
+        legacy_frame = ttk.Frame(notebook, style='Theme.TFrame')
+        notebook.add(legacy_frame, text="Legacy")
+        
         # Adaptive trigger strength control
-        trigger_frame = ttk.Frame(content, style='Theme.TFrame')
-        trigger_frame.grid(row=3, column=0, sticky="ew", padx=5, pady=2)
-        trigger_frame.grid_columnconfigure(1, weight=1)  # Allow progress bar to expand
+        trigger_frame = ttk.Frame(legacy_frame, style='Theme.TFrame')
+        trigger_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=2)
+        trigger_frame.grid_columnconfigure(1, weight=1)
         
         ttk.Label(trigger_frame, text="Trigger Strength:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
         trigger_scale = ttk.Scale(
@@ -1182,9 +1246,9 @@ class TelemetryDashboard:
         self.trigger_value_label.grid(row=0, column=2)
         
         # Haptic vibration strength control
-        haptic_frame = ttk.Frame(content, style='Theme.TFrame')
-        haptic_frame.grid(row=4, column=0, sticky="ew", padx=5, pady=2)
-        haptic_frame.grid_columnconfigure(1, weight=1)  # Allow progress bar to expand
+        haptic_frame = ttk.Frame(legacy_frame, style='Theme.TFrame')
+        haptic_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=2)
+        haptic_frame.grid_columnconfigure(1, weight=1)
         
         ttk.Label(haptic_frame, text="Haptic Strength:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
         haptic_scale = ttk.Scale(
@@ -1201,9 +1265,9 @@ class TelemetryDashboard:
         self.haptic_value_label.grid(row=0, column=2)
         
         # Tire slip detection threshold control
-        slip_frame = ttk.Frame(content, style='Theme.TFrame')
-        slip_frame.grid(row=5, column=0, sticky="ew", padx=5, pady=2)
-        slip_frame.grid_columnconfigure(1, weight=1)  # Allow progress bar to expand
+        slip_frame = ttk.Frame(legacy_frame, style='Theme.TFrame')
+        slip_frame.grid(row=2, column=0, sticky="ew", padx=5, pady=2)
+        slip_frame.grid_columnconfigure(1, weight=1)
         
         ttk.Label(slip_frame, text="Trigger Slip Threshold:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
         slip_scale = ttk.Scale(
@@ -1220,9 +1284,9 @@ class TelemetryDashboard:
         self.slip_value_label.grid(row=0, column=2)
         
         # Trigger threshold control
-        trigger_threshold_frame = ttk.Frame(content, style='Theme.TFrame')
-        trigger_threshold_frame.grid(row=6, column=0, sticky="ew", padx=5, pady=2)
-        trigger_threshold_frame.grid_columnconfigure(1, weight=1)  # Allow progress bar to expand
+        trigger_threshold_frame = ttk.Frame(legacy_frame, style='Theme.TFrame')
+        trigger_threshold_frame.grid(row=3, column=0, sticky="ew", padx=5, pady=2)
+        trigger_threshold_frame.grid_columnconfigure(1, weight=1)
         
         ttk.Label(trigger_threshold_frame, text="Haptic Slip Threshold:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
         threshold_scale = ttk.Scale(
@@ -1305,6 +1369,32 @@ class TelemetryDashboard:
         config['GUI']['fps'] = f"{fps:.1f}"
         self.save_config()
     
+    def _create_rbr_slider(self, parent, row, label_text, variable, from_, to, format_str, unit):
+        """创建参数滑块的辅助方法"""
+        frame = ttk.Frame(parent, style='Theme.TFrame')
+        frame.grid(row=row, column=0, sticky="ew", padx=5, pady=2)
+        frame.grid_columnconfigure(1, weight=1)
+        
+        ttk.Label(frame, text=label_text, style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
+        
+        scale = ttk.Scale(
+            frame,
+            from_=from_,
+            to=to,
+            orient=tk.HORIZONTAL,
+            variable=variable,
+            command=lambda x: self.update_new_parameters(),
+            style='Theme.Horizontal.TScale'
+        )
+        scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
+        
+        value_label = ttk.Label(frame, text=(format_str % variable.get()) + unit, style='Theme.TLabel', width=8, anchor="e")
+        value_label.grid(row=0, column=2)
+        
+        # 保存标签引用以便更新
+        attr_name = f"_{label_text.replace(' ', '_').replace(':', '').lower()}_label"
+        setattr(self, attr_name, value_label)
+    
     def save_config(self):
         """Save configuration to file"""
         try:
@@ -1322,6 +1412,72 @@ class TelemetryDashboard:
                 config.write(configfile)
         except Exception as e:
             print(f"Error saving config: {e}")
+    
+    def update_new_parameters(self, *args):
+        """更新新的Brake/Throttle Slip参数"""
+        global brake_threshold, brake_front_slip_threshold, brake_rear_slip_threshold
+        global brake_feedback_strength, brake_amplitude, brake_min_frequency, brake_max_frequency
+        global throttle_threshold, throttle_front_slip_threshold, throttle_rear_slip_threshold
+        global throttle_feedback_strength, throttle_amplitude, throttle_min_frequency, throttle_max_frequency
+        
+        # 更新全局变量
+        brake_threshold = self.brake_threshold.get()
+        brake_front_slip_threshold = self.brake_front_slip_threshold.get()
+        brake_rear_slip_threshold = self.brake_rear_slip_threshold.get()
+        brake_feedback_strength = self.brake_feedback_strength.get()
+        brake_amplitude = self.brake_amplitude.get()
+        brake_min_frequency = self.brake_min_frequency.get()
+        brake_max_frequency = self.brake_max_frequency.get()
+        
+        throttle_threshold = self.throttle_threshold.get()
+        throttle_front_slip_threshold = self.throttle_front_slip_threshold.get()
+        throttle_rear_slip_threshold = self.throttle_rear_slip_threshold.get()
+        throttle_feedback_strength = self.throttle_feedback_strength.get()
+        throttle_amplitude = self.throttle_amplitude.get()
+        throttle_min_frequency = self.throttle_min_frequency.get()
+        throttle_max_frequency = self.throttle_max_frequency.get()
+        
+        # 更新显示值
+        if hasattr(self, '_brake_threshold_label'):
+            self._brake_threshold_label.config(text=f"{brake_threshold:.1f}%")
+        if hasattr(self, '_front_slip_threshold_label'):
+            self._front_slip_threshold_label.config(text=f"{brake_front_slip_threshold:.1f}")
+        if hasattr(self, '_rear_slip_threshold_label'):
+            self._rear_slip_threshold_label.config(text=f"{brake_rear_slip_threshold:.1f}")
+        if hasattr(self, '_feedback_strength_label'):
+            self._feedback_strength_label.config(text=f"{brake_feedback_strength}")
+        if hasattr(self, '_amplitude_label'):
+            self._amplitude_label.config(text=f"{brake_amplitude}")
+        if hasattr(self, '_min_frequency_label'):
+            self._min_frequency_label.config(text=f"{brake_min_frequency} Hz")
+        if hasattr(self, '_max_frequency_label'):
+            self._max_frequency_label.config(text=f"{brake_max_frequency} Hz")
+        
+        if hasattr(self, '_throttle_threshold_label'):
+            self._throttle_threshold_label.config(text=f"{throttle_threshold:.1f}%")
+        
+        # 保存到配置文件
+        config['BrakeSlip'] = {
+            'brake_threshold': f"{brake_threshold:.1f}",
+            'front_slip_threshold': f"{brake_front_slip_threshold:.1f}",
+            'rear_slip_threshold': f"{brake_rear_slip_threshold:.1f}",
+            'feedback_strength': str(brake_feedback_strength),
+            'amplitude': str(brake_amplitude),
+            'min_frequency': str(brake_min_frequency),
+            'max_frequency': str(brake_max_frequency)
+        }
+        
+        config['ThrottleSlip'] = {
+            'throttle_threshold': f"{throttle_threshold:.1f}",
+            'front_slip_threshold': f"{throttle_front_slip_threshold:.1f}",
+            'rear_slip_threshold': f"{throttle_rear_slip_threshold:.1f}",
+            'feedback_strength': str(throttle_feedback_strength),
+            'amplitude': str(throttle_amplitude),
+            'min_frequency': str(throttle_min_frequency),
+            'max_frequency': str(throttle_max_frequency)
+        }
+        
+        self.save_config()
     
     def update_feedback_strength(self, format_target=None, *args):
         """Update feedback strength parameter"""
@@ -2134,7 +2290,27 @@ else:
     config['Network'] = {
         'udp_port': '6776'
     }
-    # 添加新的配置部分：反馈强度设置
+    # 刹车滑移反馈参数 (Brake Slip)
+    config['BrakeSlip'] = {
+        'brake_threshold': '3.0',           # 刹车输入阈值 % (0.1-99)
+        'front_slip_threshold': '5.0',      # 前轮滑移率阈值 (1.0-20.0)
+        'rear_slip_threshold': '5.0',       # 后轮滑移率阈值 (1.0-20.0)
+        'feedback_strength': '7',           # 反馈强度 (1-8)
+        'amplitude': '5',                   # 震动振幅 (1-8)
+        'min_frequency': '25',              # 最小频率 Hz (1-50)
+        'max_frequency': '85',              # 最大频率 Hz (20-150)
+    }
+    # 油门滑移反馈参数 (Throttle Slip)
+    config['ThrottleSlip'] = {
+        'throttle_threshold': '3.0',        # 油门输入阈值 % (0.1-99)
+        'front_slip_threshold': '5.0',      # 前轮滑移率阈值 (1.0-20.0)
+        'rear_slip_threshold': '5.0',       # 后轮滑移率阈值 (1.0-20.0)
+        'feedback_strength': '8',           # 反馈强度 (1-8)
+        'amplitude': '4',                   # 震动振幅 (1-8)
+        'min_frequency': '30',              # 最小频率 Hz (1-50)
+        'max_frequency': '96',              # 最大频率 Hz (20-150)
+    }
+    # 传统参数(向后兼容)
     config['Feedback'] = {
         'trigger_strength': '2.0',      # 自适应扳机强度系数 (0.1-2.0)
         'haptic_strength': '1.0',       # Haptic震动反馈强度系数 (0-1.0)
@@ -2319,6 +2495,10 @@ def reload_config_if_changed():
     """若 config.ini 已修改则重新加载，使运行时修改生效"""
     global adaptive_trigger_enabled, led_effect_enabled, haptic_effect_enabled, print_telemetry_enabled
     global trigger_strength, haptic_strength, wheel_slip_threshold, trigger_threshold
+    global brake_threshold, brake_front_slip_threshold, brake_rear_slip_threshold
+    global brake_feedback_strength, brake_amplitude, brake_min_frequency, brake_max_frequency
+    global throttle_threshold, throttle_front_slip_threshold, throttle_rear_slip_threshold
+    global throttle_feedback_strength, throttle_amplitude, throttle_min_frequency, throttle_max_frequency
     global auto_gear_shift_enabled, gear_shift_presets, active_gear_preset
     global shift_up_rpm, shift_down_rpm, shift_up_cooldown, shift_down_cooldown, gear_shift_debug
     global last_config_mtime
@@ -2335,6 +2515,25 @@ def reload_config_if_changed():
             haptic_strength = max(0, min(1.0, config.getfloat('Feedback', 'haptic_strength', fallback=1.0)))
             wheel_slip_threshold = max(1.0, min(20.0, config.getfloat('Feedback', 'wheel_slip_threshold', fallback=10.0)))
             trigger_threshold = max(1.0, min(20.0, config.getfloat('Feedback', 'trigger_threshold', fallback=10.0)))
+            
+            # 刹车滑移参数
+            brake_threshold = max(0.1, min(99.0, config.getfloat('BrakeSlip', 'brake_threshold', fallback=3.0)))
+            brake_front_slip_threshold = max(1.0, min(20.0, config.getfloat('BrakeSlip', 'front_slip_threshold', fallback=5.0)))
+            brake_rear_slip_threshold = max(1.0, min(20.0, config.getfloat('BrakeSlip', 'rear_slip_threshold', fallback=5.0)))
+            brake_feedback_strength = max(1, min(8, config.getint('BrakeSlip', 'feedback_strength', fallback=7)))
+            brake_amplitude = max(1, min(8, config.getint('BrakeSlip', 'amplitude', fallback=5)))
+            brake_min_frequency = max(1, min(50, config.getint('BrakeSlip', 'min_frequency', fallback=25)))
+            brake_max_frequency = max(20, min(150, config.getint('BrakeSlip', 'max_frequency', fallback=85)))
+            
+            # 油门滑移参数
+            throttle_threshold = max(0.1, min(99.0, config.getfloat('ThrottleSlip', 'throttle_threshold', fallback=3.0)))
+            throttle_front_slip_threshold = max(1.0, min(20.0, config.getfloat('ThrottleSlip', 'front_slip_threshold', fallback=5.0)))
+            throttle_rear_slip_threshold = max(1.0, min(20.0, config.getfloat('ThrottleSlip', 'rear_slip_threshold', fallback=5.0)))
+            throttle_feedback_strength = max(1, min(8, config.getint('ThrottleSlip', 'feedback_strength', fallback=8)))
+            throttle_amplitude = max(1, min(8, config.getint('ThrottleSlip', 'amplitude', fallback=4)))
+            throttle_min_frequency = max(1, min(50, config.getint('ThrottleSlip', 'min_frequency', fallback=30)))
+            throttle_max_frequency = max(20, min(150, config.getint('ThrottleSlip', 'max_frequency', fallback=96)))
+            
             if config.has_section('GearShift'):
                 auto_gear_shift_enabled = config.getboolean('GearShift', 'auto_gear_shift', fallback=False)
                 active_gear_preset = config.getint('GearShift', 'active_preset', fallback=2) - 1
@@ -2877,19 +3076,11 @@ while True:
     packet = Packet([])
 
     ###################################################################################
-    # Adaptive Trigger
+    # Adaptive Trigger - 基于 Race-Element 优化算法
     ###################################################################################
     
     if adaptive_trigger_enabled:
-        # Default trigger modes
-        left_mode = TriggerMode.Normal
-        right_mode = TriggerMode.Normal
-        
-        # Default strength parameters - 应用配置的强度系数
-        left_strength = 1 * trigger_strength
-        right_strength = 1 * trigger_strength
-        
-        # Only apply effects when car is moving at a reasonable speed
+        # 只在车辆运动时应用效果
         if ground_speed * 3.6 > 5:  # Convert to km/h for comparison
             # Convert ground_speed from m/s to km/h for consistent units
             ground_speed_kmh = ground_speed * 3.6
@@ -2900,41 +3091,82 @@ while True:
             rl_slip = ((wheel_speed_rl / ground_speed_kmh) - 1) * 100
             rr_slip = ((wheel_speed_rr / ground_speed_kmh) - 1) * 100
             
-            # Check for front wheel lock (for left trigger - brake)
-            if (fl_slip < -wheel_slip_threshold or fr_slip < -wheel_slip_threshold) and brake > 30:
-                # Front wheel lock detected - provide feedback on left trigger
-                left_mode = TriggerMode.VibrateTriggerPulse
-                # Increase strength based on how severe the lock is
-                max_lock = min(fl_slip, fr_slip)
-                left_strength = min(8, 2 + abs(max_lock) / 10) * trigger_strength  # 应用配置的强度系数
+            # 计算前后轮滑移（绝对值）
+            front_slip = max(abs(fl_slip), abs(fr_slip))
+            rear_slip = max(abs(rl_slip), abs(rr_slip))
             
-            # Check for wheel spin on any wheel when throttle is applied
-            # This handles FWD, RWD, and AWD vehicles
-            if throttle > 50:
-                max_spin = max(fl_slip if fl_slip > wheel_slip_threshold else 0, 
-                              fr_slip if fr_slip > wheel_slip_threshold else 0,
-                              rl_slip if rl_slip > wheel_slip_threshold else 0,
-                              rr_slip if rr_slip > wheel_slip_threshold else 0)
-                
-                if max_spin > wheel_slip_threshold:  # Any wheel is spinning
-                    # Wheel spin detected - provide feedback on right trigger
-                    right_mode = TriggerMode.VibrateTriggerPulse
-                    # Increase strength based on how severe the spin is
-                    right_strength = min(8, 2 + max_spin / 10) * trigger_strength  # 应用配置的强度系数
+            # === 刹车滑移反馈 (左扳机 L2) ===
+            if brake > brake_threshold:
+                # 检查前后轮是否超过阈值
+                if front_slip > brake_front_slip_threshold or rear_slip > brake_rear_slip_threshold:
+                    # 计算滑移系数 (RBR适配版本)
+                    front_slip_coef = front_slip / 5.0   # RBR滑移率量级较大，归一化
+                    rear_slip_coef = rear_slip / 5.0
+                    
+                    # 计算总百分比 (0-1)
+                    percentage = (front_slip_coef + rear_slip_coef) / 2.0
+                    percentage = max(0.0, min(1.0, percentage))
+                    
+                    if percentage >= 0.05:  # 最小触发阈值
+                        # 1) FEEDBACK 模式 - 提供阻力感
+                        feedback_str = int(brake_feedback_strength * percentage)
+                        feedback_str = max(1, min(8, feedback_str))
+                        
+                        packet.instructions.append(
+                            Instruction(InstructionType.TriggerUpdate, 
+                                       [0, Trigger.Left, 21, 1, feedback_str, 0])  # mode=21=FEEDBACK
+                        )
+                        
+                        # 2) VIBRATION 模式 - 提供震动反馈
+                        freq = int(brake_min_frequency + (brake_max_frequency - brake_min_frequency) * percentage)
+                        freq = max(brake_min_frequency, min(brake_max_frequency, freq))
+                        
+                        packet.instructions.append(
+                            Instruction(InstructionType.TriggerUpdate,
+                                       [0, Trigger.Left, 23, 0, brake_amplitude, freq])  # mode=23=VIBRATION
+                        )
             
-            # Check for rear wheel lock with handbrake
-            elif (rl_slip < -wheel_slip_threshold or rr_slip < -wheel_slip_threshold) and (handbrake > 30 or brake > 80) and throttle > 30:
-                # Rear wheel lock with handbrake + throttle scenario
-                right_mode = TriggerMode.VibrateTriggerPulse
-                # Increase strength based on how severe the lock is
-                max_lock = min(rl_slip, rr_slip)
-                right_strength = min(8, 2 + abs(max_lock) / 10) * trigger_strength  # 应用配置的强度系数
-
-        # v2-55+ requires integer parameters; float causes std::bad_any_cast in HandleTriggerUpdate
-        left_strength_int = max(1, min(8, int(round(left_strength))))
-        right_strength_int = max(1, min(8, int(round(right_strength))))
-        packet.instructions.append(Instruction(InstructionType.TriggerUpdate, [0, Trigger.Left, left_mode, left_strength_int, 0, 0]))
-        packet.instructions.append(Instruction(InstructionType.TriggerUpdate, [0, Trigger.Right, right_mode, right_strength_int, 0, 0]))
+            # === 油门滑移反馈 (右扳机 R2) ===
+            if throttle > throttle_threshold:
+                # 检查前后轮是否超过阈值
+                if front_slip > throttle_front_slip_threshold or rear_slip > throttle_rear_slip_threshold:
+                    # 计算滑移系数 (RBR适配版本)
+                    front_slip_coef = front_slip / 5.0   # RBR滑移率量级较大，归一化
+                    rear_slip_coef = rear_slip / 5.0
+                    
+                    # 计算总百分比 (0-1)
+                    percentage = (front_slip_coef + rear_slip_coef) / 2.0
+                    percentage = max(0.0, min(1.0, percentage))
+                    
+                    if percentage >= 0.05:  # 最小触发阈值
+                        # 1) FEEDBACK 模式 - 提供阻力感
+                        feedback_str = int(throttle_feedback_strength * percentage)
+                        feedback_str = max(1, min(8, feedback_str))
+                        
+                        packet.instructions.append(
+                            Instruction(InstructionType.TriggerUpdate,
+                                       [0, Trigger.Right, 21, 1, feedback_str, 0])  # mode=21=FEEDBACK
+                        )
+                        
+                        # 2) VIBRATION 模式 - 提供震动反馈
+                        freq = int(throttle_min_frequency + (throttle_max_frequency - throttle_min_frequency) * percentage)
+                        freq = max(throttle_min_frequency, min(throttle_max_frequency, freq))
+                        
+                        packet.instructions.append(
+                            Instruction(InstructionType.TriggerUpdate,
+                                       [0, Trigger.Right, 23, 0, throttle_amplitude, freq])  # mode=23=VIBRATION
+                        )
+        
+        # 如果没有触发任何效果，恢复正常模式
+        if not packet.instructions:
+            packet.instructions.append(
+                Instruction(InstructionType.TriggerUpdate,
+                           [0, Trigger.Left, TriggerMode.Normal, 0, 0, 0])
+            )
+            packet.instructions.append(
+                Instruction(InstructionType.TriggerUpdate,
+                           [0, Trigger.Right, TriggerMode.Normal, 0, 0, 0])
+            )
 
     ###################################################################################
     # LED Effect

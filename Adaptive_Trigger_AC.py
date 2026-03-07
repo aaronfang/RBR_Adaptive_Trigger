@@ -335,12 +335,25 @@ DEFAULT_CONFIG = {
         'led_effect': 'True',
         'haptic_effect': 'False',
     },
-    'Feedback': {
-        'trigger_strength': '5.00',       # 扳机强度系数 (0.1-5.0)
-        'wheel_slip_threshold': '0.500',  # 打滑阈值
-        'trigger_threshold': '0.20',      # 扳机触发阈值
-        'vibration_mode': 'continuous',   # pulse=脉冲(11) / continuous=连续(8) 连续模式通常更强烈
-        'max_strength_override': '255',   # 0=使用DSX标准(1-8) / 255=实验性尝试硬件最大值
+    # 刹车滑移反馈参数 (Brake Slip)
+    'BrakeSlip': {
+        'brake_threshold': '3.0',           # 刹车输入阈值 % (0.1-99)
+        'front_slip_threshold': '0.250',    # 前轮滑移率阈值 (0.05-6.0)
+        'rear_slip_threshold': '0.250',     # 后轮滑移率阈值 (0.05-6.0)
+        'feedback_strength': '7',           # 反馈强度 (1-8)
+        'amplitude': '5',                   # 震动振幅 (1-8)
+        'min_frequency': '25',              # 最小频率 Hz (1-50)
+        'max_frequency': '85',              # 最大频率 Hz (20-150)
+    },
+    # 油门滑移反馈参数 (Throttle Slip)
+    'ThrottleSlip': {
+        'throttle_threshold': '3.0',        # 油门输入阈值 % (0.1-99)
+        'front_slip_threshold': '0.350',    # 前轮滑移率阈值 (0.05-6.0)
+        'rear_slip_threshold': '0.250',     # 后轮滑移率阈值 (0.05-10.0)
+        'feedback_strength': '8',           # 反馈强度 (1-8)
+        'amplitude': '4',                   # 震动振幅 (1-8)
+        'min_frequency': '30',              # 最小频率 Hz (1-50)
+        'max_frequency': '96',              # 最大频率 Hz (20-150)
     },
     'GUI': {
         'fps': '60.0',
@@ -375,16 +388,40 @@ adaptive_trigger_enabled = config.getboolean('Features', 'adaptive_trigger', fal
 led_effect_enabled = config.getboolean('Features', 'led_effect', fallback=True)
 haptic_effect_enabled = config.getboolean('Features', 'haptic_effect', fallback=False)
 
-trigger_strength = config.getfloat('Feedback', 'trigger_strength', fallback=5.00)
-wheel_slip_threshold = config.getfloat('Feedback', 'wheel_slip_threshold', fallback=0.500)
-trigger_threshold = config.getfloat('Feedback', 'trigger_threshold', fallback=0.20)
-vibration_mode = config.get('Feedback', 'vibration_mode', fallback='continuous')  # pulse / continuous
-max_strength_override = int(config.get('Feedback', 'max_strength_override', fallback='255'))
+# 刹车滑移参数 (Brake Slip)
+brake_threshold = config.getfloat('BrakeSlip', 'brake_threshold', fallback=3.0)
+brake_front_slip_threshold = config.getfloat('BrakeSlip', 'front_slip_threshold', fallback=0.250)
+brake_rear_slip_threshold = config.getfloat('BrakeSlip', 'rear_slip_threshold', fallback=0.250)
+brake_feedback_strength = config.getint('BrakeSlip', 'feedback_strength', fallback=7)
+brake_amplitude = config.getint('BrakeSlip', 'amplitude', fallback=5)
+brake_min_frequency = config.getint('BrakeSlip', 'min_frequency', fallback=25)
+brake_max_frequency = config.getint('BrakeSlip', 'max_frequency', fallback=85)
+
+# 油门滑移参数 (Throttle Slip)
+throttle_threshold = config.getfloat('ThrottleSlip', 'throttle_threshold', fallback=3.0)
+throttle_front_slip_threshold = config.getfloat('ThrottleSlip', 'front_slip_threshold', fallback=0.350)
+throttle_rear_slip_threshold = config.getfloat('ThrottleSlip', 'rear_slip_threshold', fallback=0.250)
+throttle_feedback_strength = config.getint('ThrottleSlip', 'feedback_strength', fallback=8)
+throttle_amplitude = config.getint('ThrottleSlip', 'amplitude', fallback=4)
+throttle_min_frequency = config.getint('ThrottleSlip', 'min_frequency', fallback=30)
+throttle_max_frequency = config.getint('ThrottleSlip', 'max_frequency', fallback=96)
 
 # 确保参数在合理范围内
-trigger_strength = max(0.1, min(5.0, trigger_strength))
-wheel_slip_threshold = max(0.05, min(1.0, wheel_slip_threshold))
-trigger_threshold = max(0.1, min(0.5, trigger_threshold))
+brake_threshold = max(0.1, min(99.0, brake_threshold))
+brake_front_slip_threshold = max(0.05, min(6.0, brake_front_slip_threshold))
+brake_rear_slip_threshold = max(0.05, min(6.0, brake_rear_slip_threshold))
+brake_feedback_strength = max(1, min(8, brake_feedback_strength))
+brake_amplitude = max(1, min(8, brake_amplitude))
+brake_min_frequency = max(1, min(50, brake_min_frequency))
+brake_max_frequency = max(20, min(150, brake_max_frequency))
+
+throttle_threshold = max(0.1, min(99.0, throttle_threshold))
+throttle_front_slip_threshold = max(0.05, min(6.0, throttle_front_slip_threshold))
+throttle_rear_slip_threshold = max(0.05, min(10.0, throttle_rear_slip_threshold))
+throttle_feedback_strength = max(1, min(8, throttle_feedback_strength))
+throttle_amplitude = max(1, min(8, throttle_amplitude))
+throttle_min_frequency = max(1, min(50, throttle_min_frequency))
+throttle_max_frequency = max(20, min(150, throttle_max_frequency))
 
 # LED颜色阈值
 RPM_GREEN_THRESHOLD = config.getfloat('LED', 'rpm_green', fallback=70.0)
@@ -696,8 +733,26 @@ class ACTelemetryDashboard:
     
     def on_parameter_change(self, event=None):
         """参数变化回调"""
-        self.trigger_value_label.config(text=f"{self.trigger_strength.get():.1f}")
-        self.slip_value_label.config(text=f"{self.wheel_slip_threshold.get():.2f}")
+        # 更新所有值标签
+        if hasattr(self, '_brake_threshold_label'):
+            self._brake_threshold_label.config(text=f"{self.brake_threshold.get():.1f}%")
+        if hasattr(self, '_front_slip_threshold_label'):
+            self._front_slip_threshold_label.config(text=f"{self.brake_front_slip_threshold.get():.3f}")
+        if hasattr(self, '_rear_slip_threshold_label'):
+            self._rear_slip_threshold_label.config(text=f"{self.brake_rear_slip_threshold.get():.3f}")
+        if hasattr(self, '_feedback_strength_label'):
+            self._feedback_strength_label.config(text=f"{self.brake_feedback_strength.get()}")
+        if hasattr(self, '_amplitude_label'):
+            self._amplitude_label.config(text=f"{self.brake_amplitude.get()}")
+        if hasattr(self, '_min_frequency_label'):
+            self._min_frequency_label.config(text=f"{self.brake_min_frequency.get()} Hz")
+        if hasattr(self, '_max_frequency_label'):
+            self._max_frequency_label.config(text=f"{self.brake_max_frequency.get()} Hz")
+        
+        # 油门参数标签更新
+        if hasattr(self, '_throttle_threshold_label'):
+            self._throttle_threshold_label.config(text=f"{self.throttle_threshold.get():.1f}%")
+        
         self.save_config()
     
     def save_config(self):
@@ -797,9 +852,11 @@ class ACTelemetryDashboard:
     def get_slip_color(self, slip_value):
         """根据打滑值返回颜色"""
         abs_slip = abs(slip_value)
-        if abs_slip < wheel_slip_threshold:
+        # 使用刹车和油门阈值的平均值
+        avg_threshold = (brake_front_slip_threshold + throttle_front_slip_threshold) / 2
+        if abs_slip < avg_threshold:
             return "green"
-        elif abs_slip < trigger_threshold:
+        elif abs_slip < avg_threshold * 2:
             return "orange"
         else:
             return "red"
@@ -811,26 +868,29 @@ class ACTelemetryDashboard:
             return
         
         wheel_slip = physics_data.wheelSlip
-        gas = physics_data.gas
-        brake = physics_data.brake
+        gas = physics_data.gas * 100
+        brake = physics_data.brake * 100
         
         # 计算前后轮打滑 (max兼容前驱/后驱/四驱)
-        front_slip = (abs(wheel_slip[0]) + abs(wheel_slip[1])) / 2
-        rear_slip = (abs(wheel_slip[2]) + abs(wheel_slip[3])) / 2
-        max_slip = max(front_slip, rear_slip)
+        front_slip = max(abs(wheel_slip[0]), abs(wheel_slip[1]))
+        rear_slip = max(abs(wheel_slip[2]), abs(wheel_slip[3]))
         
         status_text = "Normal"
         status_color = "green"
         
-        # 油门过大导致滑移(右扳机)
-        if gas > 0.3 and max_slip > wheel_slip_threshold:
-            status_text = f"Throttle Slip! (R2: {min(max_slip * 10, 1.0):.2f})"
-            status_color = "red"
+        # 油门滑移检测(右扳机 R2)
+        if gas > throttle_threshold:
+            if front_slip > throttle_front_slip_threshold or rear_slip > throttle_rear_slip_threshold:
+                percentage = min(1.0, (front_slip * 3.0 + rear_slip * 5.0) / 12.5)
+                status_text = f"Throttle Slip! (R2: {percentage:.2f})"
+                status_color = "red"
         
-        # 刹车抱死导致滑移(左扳机)
-        elif brake > 0.3 and max_slip > wheel_slip_threshold:
-            status_text = f"Brake Lock! (L2: {min(max_slip * 10, 1.0):.2f})"
-            status_color = "red"
+        # 刹车滑移检测(左扳机 L2)
+        elif brake > brake_threshold:
+            if front_slip > brake_front_slip_threshold or rear_slip > brake_rear_slip_threshold:
+                percentage = min(1.0, (front_slip * 4.0 + rear_slip * 2.0) / 17.5)
+                status_text = f"Brake Lock! (L2: {percentage:.2f})"
+                status_color = "red"
         
         self.trigger_status_label.config(text=status_text, foreground=status_color)
 
@@ -901,56 +961,95 @@ def main_telemetry_loop(app, root):
                 last_static_info_time = current_time
             
             ###################################################################################
-            # 扳机反馈逻辑
+            # 扳机反馈逻辑 - 基于 Race-Element 优化算法
             ###################################################################################
             
             packet = Packet([])
             
             # 自适应扳机
             if adaptive_trigger_enabled:
-                left_mode = TriggerMode.Normal
-                right_mode = TriggerMode.Normal
-                left_strength = 1 * trigger_strength
-                right_strength = 1 * trigger_strength
-                
-                # 选择震动模式: continuous=连续震动(通常更强烈) / pulse=脉冲震动
-                vib_mode = TriggerMode.VibrateTrigger if vibration_mode == 'continuous' else TriggerMode.VibrateTriggerPulse
-                max_strength = 255 if max_strength_override == 255 else 8
-                
                 # 只在车辆运动时应用效果
                 if physics.speedKmh > 5:
                     wheel_slip = physics.wheelSlip
+                    brake_input = physics.brake * 100  # 转换为百分比
+                    throttle_input = physics.gas * 100
                     
-                    # 计算前后轮打滑
-                    front_slip = (abs(wheel_slip[0]) + abs(wheel_slip[1])) / 2
-                    rear_slip = (abs(wheel_slip[2]) + abs(wheel_slip[3])) / 2
-                    # 折中方案: 取前后轮较大值, 兼容前驱/后驱/四驱
-                    # 前驱:油门过大会前轮打滑 | 后驱:后轮打滑 | 四驱:任一轴打滑
-                    max_slip = max(front_slip, rear_slip)
+                    # 计算前后轮打滑 (绝对值)
+                    front_slip = max(abs(wheel_slip[0]), abs(wheel_slip[1]))
+                    rear_slip = max(abs(wheel_slip[2]), abs(wheel_slip[3]))
                     
-                    # 强度公式: 2 + slip*30 (打滑较小时强度偏低)
-                    # 左扳机(L2): 刹车抱死导致滑移 - 任意轮抱死
-                    if physics.brake > 0.3 and max_slip > wheel_slip_threshold:
-                        left_mode = vib_mode
-                        left_strength = min(max_strength, 2 + max_slip * 30) * trigger_strength
+                    # === 刹车滑移反馈 (左扳机 L2) ===
+                    if brake_input > brake_threshold:
+                        # 检查前后轮是否超过阈值
+                        if front_slip > brake_front_slip_threshold or rear_slip > brake_rear_slip_threshold:
+                            # 计算滑移系数 (参考 Race-Element 算法)
+                            front_slip_coef = front_slip * 4.0  # 限制在 ~10
+                            rear_slip_coef = rear_slip * 2.0    # 限制在 ~7.5
+                            
+                            # 计算总百分比 (0-1)
+                            percentage = (front_slip_coef + rear_slip_coef) / 17.5
+                            percentage = max(0.0, min(1.0, percentage))
+                            
+                            if percentage >= 0.05:  # 最小触发阈值
+                                # 1) FEEDBACK 模式 - 提供阻力感
+                                feedback_str = int(brake_feedback_strength * percentage)
+                                feedback_str = max(1, min(8, feedback_str))
+                                
+                                packet.instructions.append(
+                                    Instruction(InstructionType.TriggerUpdate.value,
+                                               [0, Trigger.Left.value, 21, 1, feedback_str, 0])  # mode=21=FEEDBACK
+                                )
+                                
+                                # 2) VIBRATION 模式 - 提供震动反馈
+                                freq = int(brake_min_frequency + (brake_max_frequency - brake_min_frequency) * percentage)
+                                freq = max(brake_min_frequency, min(brake_max_frequency, freq))
+                                
+                                packet.instructions.append(
+                                    Instruction(InstructionType.TriggerUpdate.value,
+                                               [0, Trigger.Left.value, 23, 0, brake_amplitude, freq])  # mode=23=VIBRATION
+                                )
                     
-                    # 右扳机(R2): 油门过大导致滑移 - 任意驱动轮打滑
-                    if physics.gas > 0.3 and max_slip > wheel_slip_threshold:
-                        right_mode = vib_mode
-                        right_strength = min(max_strength, 2 + max_slip * 30) * trigger_strength
+                    # === 油门滑移反馈 (右扳机 R2) ===
+                    if throttle_input > throttle_threshold:
+                        # 检查前后轮是否超过阈值
+                        if front_slip > throttle_front_slip_threshold or rear_slip > throttle_rear_slip_threshold:
+                            # 计算滑移系数 (参考 Race-Element 算法)
+                            front_slip_coef = front_slip * 3.0  # 限制在 ~5
+                            rear_slip_coef = rear_slip * 5.0    # 限制在 ~7.5
+                            
+                            # 计算总百分比 (0-1)
+                            percentage = (front_slip_coef + rear_slip_coef) / 12.5
+                            percentage = max(0.0, min(1.0, percentage))
+                            
+                            if percentage >= 0.05:  # 最小触发阈值
+                                # 1) FEEDBACK 模式 - 提供阻力感
+                                feedback_str = int(throttle_feedback_strength * percentage)
+                                feedback_str = max(1, min(8, feedback_str))
+                                
+                                packet.instructions.append(
+                                    Instruction(InstructionType.TriggerUpdate.value,
+                                               [0, Trigger.Right.value, 21, 1, feedback_str, 0])  # mode=21=FEEDBACK
+                                )
+                                
+                                # 2) VIBRATION 模式 - 提供震动反馈
+                                freq = int(throttle_min_frequency + (throttle_max_frequency - throttle_min_frequency) * percentage)
+                                freq = max(throttle_min_frequency, min(throttle_max_frequency, freq))
+                                
+                                packet.instructions.append(
+                                    Instruction(InstructionType.TriggerUpdate.value,
+                                               [0, Trigger.Right.value, 23, 0, throttle_amplitude, freq])  # mode=23=VIBRATION
+                                )
                 
-                # 转换为整数, 实验模式下可发送最高255
-                left_strength_int = max(1, min(max_strength, int(round(left_strength))))
-                right_strength_int = max(1, min(max_strength, int(round(right_strength))))
-                
-                packet.instructions.append(
-                    Instruction(InstructionType.TriggerUpdate.value, 
-                               [0, Trigger.Left.value, left_mode.value, left_strength_int, 0, 0])
-                )
-                packet.instructions.append(
-                    Instruction(InstructionType.TriggerUpdate.value, 
-                               [0, Trigger.Right.value, right_mode.value, right_strength_int, 0, 0])
-                )
+                # 如果没有触发任何效果,恢复正常模式
+                if not packet.instructions:
+                    packet.instructions.append(
+                        Instruction(InstructionType.TriggerUpdate.value,
+                                   [0, Trigger.Left.value, TriggerMode.Normal.value, 0, 0, 0])
+                    )
+                    packet.instructions.append(
+                        Instruction(InstructionType.TriggerUpdate.value,
+                                   [0, Trigger.Right.value, TriggerMode.Normal.value, 0, 0, 0])
+                    )
             
             # LED效果
             if led_effect_enabled and physics.rpms > 0:
