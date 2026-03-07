@@ -2393,6 +2393,38 @@ else:
     config.read(config_path, encoding='utf-8')
     print(f"Created default configuration file at {config_path}")
 
+# 配置文件自动升级：如果配置文件缺少新section，自动添加
+config_updated = False
+if not config.has_section('BrakeSlip'):
+    config['BrakeSlip'] = {
+        'brake_threshold': '3.0',
+        'front_slip_threshold': '5.0',
+        'rear_slip_threshold': '5.0',
+        'feedback_strength': '7',
+        'amplitude': '5',
+        'min_frequency': '25',
+        'max_frequency': '85',
+    }
+    config_updated = True
+
+if not config.has_section('ThrottleSlip'):
+    config['ThrottleSlip'] = {
+        'throttle_threshold': '3.0',
+        'front_slip_threshold': '5.0',
+        'rear_slip_threshold': '5.0',
+        'feedback_strength': '8',
+        'amplitude': '4',
+        'min_frequency': '30',
+        'max_frequency': '96',
+    }
+    config_updated = True
+
+# 如果配置文件已更新，保存回文件
+if config_updated:
+    with open(config_path, 'w', encoding='utf-8') as configfile:
+        config.write(configfile)
+    print(f"Configuration file upgraded with new sections")
+
 # Get feature settings
 adaptive_trigger_enabled = config.getboolean('Features', 'adaptive_trigger', fallback=True)
 led_effect_enabled = config.getboolean('Features', 'led_effect', fallback=True)
@@ -2400,7 +2432,7 @@ haptic_effect_enabled = config.getboolean('Features', 'haptic_effect', fallback=
 print_telemetry_enabled = config.getboolean('Features', 'print_telemetry', fallback=True)
 use_gui_dashboard = config.getboolean('Features', 'use_gui_dashboard', fallback=True)
 
-# 获取反馈强度设置
+# 获取反馈强度设置（传统参数，向后兼容）
 trigger_strength = config.getfloat('Feedback', 'trigger_strength', fallback=1.0)
 haptic_strength = config.getfloat('Feedback', 'haptic_strength', fallback=1.0)
 wheel_slip_threshold = config.getfloat('Feedback', 'wheel_slip_threshold', fallback=10.0)
@@ -2411,6 +2443,41 @@ trigger_strength = max(0.1, min(2.0, trigger_strength))
 haptic_strength = max(0, min(1.0, haptic_strength))
 wheel_slip_threshold = max(1.0, min(20.0, wheel_slip_threshold))
 trigger_threshold = max(1.0, min(20.0, trigger_threshold))
+
+# 刹车滑移参数（BrakeSlip）
+brake_threshold = config.getfloat('BrakeSlip', 'brake_threshold', fallback=3.0)
+brake_front_slip_threshold = config.getfloat('BrakeSlip', 'front_slip_threshold', fallback=5.0)
+brake_rear_slip_threshold = config.getfloat('BrakeSlip', 'rear_slip_threshold', fallback=5.0)
+brake_feedback_strength = config.getint('BrakeSlip', 'feedback_strength', fallback=7)
+brake_amplitude = config.getint('BrakeSlip', 'amplitude', fallback=5)
+brake_min_frequency = config.getint('BrakeSlip', 'min_frequency', fallback=25)
+brake_max_frequency = config.getint('BrakeSlip', 'max_frequency', fallback=85)
+
+# 油门滑移参数（ThrottleSlip）
+throttle_threshold = config.getfloat('ThrottleSlip', 'throttle_threshold', fallback=3.0)
+throttle_front_slip_threshold = config.getfloat('ThrottleSlip', 'front_slip_threshold', fallback=5.0)
+throttle_rear_slip_threshold = config.getfloat('ThrottleSlip', 'rear_slip_threshold', fallback=5.0)
+throttle_feedback_strength = config.getint('ThrottleSlip', 'feedback_strength', fallback=8)
+throttle_amplitude = config.getint('ThrottleSlip', 'amplitude', fallback=4)
+throttle_min_frequency = config.getint('ThrottleSlip', 'min_frequency', fallback=30)
+throttle_max_frequency = config.getint('ThrottleSlip', 'max_frequency', fallback=96)
+
+# 确保新参数值在合理范围内
+brake_threshold = max(0.1, min(99.0, brake_threshold))
+brake_front_slip_threshold = max(1.0, min(20.0, brake_front_slip_threshold))
+brake_rear_slip_threshold = max(1.0, min(20.0, brake_rear_slip_threshold))
+brake_feedback_strength = max(1, min(8, brake_feedback_strength))
+brake_amplitude = max(1, min(8, brake_amplitude))
+brake_min_frequency = max(1, min(50, brake_min_frequency))
+brake_max_frequency = max(20, min(150, brake_max_frequency))
+
+throttle_threshold = max(0.1, min(99.0, throttle_threshold))
+throttle_front_slip_threshold = max(1.0, min(20.0, throttle_front_slip_threshold))
+throttle_rear_slip_threshold = max(1.0, min(20.0, throttle_rear_slip_threshold))
+throttle_feedback_strength = max(1, min(8, throttle_feedback_strength))
+throttle_amplitude = max(1, min(8, throttle_amplitude))
+throttle_min_frequency = max(1, min(50, throttle_min_frequency))
+throttle_max_frequency = max(20, min(150, throttle_max_frequency))
 
 # 自动换挡配置 - 支持5/6/7档车
 def _parse_rpm_list(config, section, key, default_list, min_rpm=1000, max_rpm=9000):
