@@ -3108,7 +3108,7 @@ while True:
                     percentage = (front_slip_coef + rear_slip_coef) / 2.0
                     percentage = max(0.0, min(1.0, percentage))
                     
-                    if percentage >= 0.05:  # 最小触发阈值
+                    if percentage >= 0.01:  # 最小触发阈值（降低以支持更低频率震动）
                         # 1) FEEDBACK 模式 - 提供阻力感
                         feedback_str = int(brake_feedback_strength * percentage)
                         feedback_str = max(1, min(8, feedback_str))
@@ -3139,7 +3139,7 @@ while True:
                     percentage = (front_slip_coef + rear_slip_coef) / 2.0
                     percentage = max(0.0, min(1.0, percentage))
                     
-                    if percentage >= 0.05:  # 最小触发阈值
+                    if percentage >= 0.01:  # 最小触发阈值（降低以支持更低频率震动）
                         # 1) FEEDBACK 模式 - 提供阻力感
                         feedback_str = int(throttle_feedback_strength * percentage)
                         feedback_str = max(1, min(8, feedback_str))
