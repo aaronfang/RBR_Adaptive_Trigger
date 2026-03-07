@@ -3092,18 +3092,19 @@ while True:
             rl_slip = ((wheel_speed_rl / ground_speed_kmh) - 1) * 100
             rr_slip = ((wheel_speed_rr / ground_speed_kmh) - 1) * 100
             
-            # 计算前后轮滑移（绝对值）
-            front_slip = max(abs(fl_slip), abs(fr_slip))
-            rear_slip = max(abs(rl_slip), abs(rr_slip))
-            
             # === 刹车滑移反馈 (左扳机 L2) ===
+            # 刹车抱死：车轮转速 < 车速，滑移率为负
             if brake > brake_threshold:
+                # 只检测负滑移（车轮抱死）
+                front_lock = max(abs(fl_slip) if fl_slip < 0 else 0, abs(fr_slip) if fr_slip < 0 else 0)
+                rear_lock = max(abs(rl_slip) if rl_slip < 0 else 0, abs(rr_slip) if rr_slip < 0 else 0)
+                
                 # 检查前后轮是否超过阈值
-                if front_slip > brake_front_slip_threshold or rear_slip > brake_rear_slip_threshold:
+                if front_lock > brake_front_slip_threshold or rear_lock > brake_rear_slip_threshold:
                     # 计算滑移系数 (RBR适配版本)
                     # 使用更大的除数让percentage分布更合理，支持低频到高频的完整范围
-                    front_slip_coef = front_slip / 25.0   # 调整归一化系数
-                    rear_slip_coef = rear_slip / 25.0
+                    front_slip_coef = front_lock / 25.0   # 调整归一化系数
+                    rear_slip_coef = rear_lock / 25.0
                     
                     # 计算总百分比 (0-1)
                     percentage = (front_slip_coef + rear_slip_coef) / 2.0
@@ -3129,13 +3130,18 @@ while True:
                         )
             
             # === 油门滑移反馈 (右扳机 R2) ===
+            # 油门打滑：车轮转速 > 车速，滑移率为正
             if throttle > throttle_threshold:
+                # 只检测正滑移（车轮打滑）
+                front_spin = max(fl_slip if fl_slip > 0 else 0, fr_slip if fr_slip > 0 else 0)
+                rear_spin = max(rl_slip if rl_slip > 0 else 0, rr_slip if rr_slip > 0 else 0)
+                
                 # 检查前后轮是否超过阈值
-                if front_slip > throttle_front_slip_threshold or rear_slip > throttle_rear_slip_threshold:
+                if front_spin > throttle_front_slip_threshold or rear_spin > throttle_rear_slip_threshold:
                     # 计算滑移系数 (RBR适配版本)
                     # 使用更大的除数让percentage分布更合理，支持低频到高频的完整范围
-                    front_slip_coef = front_slip / 25.0   # 调整归一化系数
-                    rear_slip_coef = rear_slip / 25.0
+                    front_slip_coef = front_spin / 25.0   # 调整归一化系数
+                    rear_slip_coef = rear_spin / 25.0
                     
                     # 计算总百分比 (0-1)
                     percentage = (front_slip_coef + rear_slip_coef) / 2.0
