@@ -1444,13 +1444,12 @@ class TelemetryDashboard:
     
     def update_feedback_strength(self, format_target=None, *args):
         """Update feedback strength parameter"""
-        global trigger_strength, haptic_strength, wheel_slip_threshold, trigger_threshold
+        global trigger_strength, haptic_strength, wheel_slip_threshold
         
         # Update global variables
         trigger_strength = self.trigger_strength.get()
         haptic_strength = self.haptic_strength.get()
         wheel_slip_threshold = self.wheel_slip_threshold.get()
-        trigger_threshold = self.trigger_threshold.get()
         
         # Update displayed values
         if format_target is not None:
@@ -1460,15 +1459,12 @@ class TelemetryDashboard:
                 format_target.config(text=f"{haptic_strength:.1f}")
             elif format_target == self.slip_value_label:
                 format_target.config(text=f"{wheel_slip_threshold:.1f}")
-            elif format_target == self.threshold_value_label:
-                format_target.config(text=f"{trigger_threshold:.1f}")
         
         # Update configuration file
         config['Feedback'] = {
             'trigger_strength': f"{trigger_strength:.1f}",
             'haptic_strength': f"{haptic_strength:.1f}",
-            'wheel_slip_threshold': f"{wheel_slip_threshold:.1f}",
-            'trigger_threshold': f"{trigger_threshold:.1f}"
+            'wheel_slip_threshold': f"{wheel_slip_threshold:.1f}"
         }
         
         self.save_config()
@@ -2277,8 +2273,7 @@ else:
     config['Feedback'] = {
         'trigger_strength': '2.0',      # 自适应扳机强度系数 (0.1-2.0)
         'haptic_strength': '1.0',       # Haptic震动反馈强度系数 (0-1.0)
-        'wheel_slip_threshold': '5.0',  # 轮胎侧滑检测的灵敏度。值越小，越容易检测到侧滑。 (1.0-20.0)
-        'trigger_threshold': '5.0'      # 触发Haptic震动的侧滑阈值 (1.0-20.0)
+        'wheel_slip_threshold': '5.0'   # 轮胎侧滑检测的灵敏度。值越小，越容易检测到侧滑。 (5.0-30.0)
     }
     # 添加GUI设置
     config['GUI'] = {
@@ -2312,7 +2307,6 @@ else:
         configfile.write("trigger_strength = 2.0\n")
         configfile.write("haptic_strength = 1.0\n")
         configfile.write("wheel_slip_threshold = 5.0\n")
-        configfile.write("trigger_threshold = 5.0\n")
         configfile.write("\n")
         
         # Write GUI section with comments
@@ -3231,11 +3225,11 @@ while True:
                               abs(rr_slip) if rr_slip < -wheel_slip_threshold else 0)
                 
                 # Determine if we have significant traction loss
-                if max_spin > trigger_threshold or max_lock > trigger_threshold:
+                if max_spin > wheel_slip_threshold or max_lock > wheel_slip_threshold:
                     # Calculate the intensity based on the maximum slip or lock
                     max_slip_intensity = max(
-                        min(1.0, (max_spin - trigger_threshold) / 50),
-                        min(1.0, (max_lock - trigger_threshold) / 50)
+                        min(1.0, (max_spin - wheel_slip_threshold) / 50),
+                        min(1.0, (max_lock - wheel_slip_threshold) / 50)
                     )
                     # Apply the user's haptic strength setting
                     final_intensity = max_slip_intensity * haptic_strength * 0.5
