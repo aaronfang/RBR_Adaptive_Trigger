@@ -779,7 +779,7 @@ class TelemetryDashboard:
     def __init__(self, root):
         self.root = root
         self.root.title("RBR Telemetry Dashboard")
-        self.root.geometry("700x470")
+        self.root.geometry("700x620")
         
         # Initialize in-game overlay
         if WINDOWS_API_AVAILABLE:
@@ -828,11 +828,10 @@ class TelemetryDashboard:
         self.title_font = tkfont.Font(family="Arial", size=12, weight="bold")
         self.value_font = tkfont.Font(family="Arial", size=11)
         
-        # 传统参数变量（向后兼容）
-        self.trigger_strength = tk.DoubleVar(value=trigger_strength)
+        # Haptic震动参数变量
+        self.trigger_strength = tk.DoubleVar(value=trigger_strength)  # 保留用于兼容性（未使用）
         self.haptic_strength = tk.DoubleVar(value=haptic_strength)
         self.wheel_slip_threshold = tk.DoubleVar(value=wheel_slip_threshold)
-        self.trigger_threshold = tk.DoubleVar(value=trigger_threshold)
         
         # 刹车滑移参数变量 (Brake Slip)
         self.brake_threshold = tk.DoubleVar(value=brake_threshold)
@@ -1222,88 +1221,56 @@ class TelemetryDashboard:
         row_idx += 1
         self._create_rbr_slider(throttle_frame, row_idx, "Max Frequency:", self.throttle_max_frequency, 20, 150, "%d", " Hz")
         
-        # === Legacy 标签页 (传统参数) ===
-        legacy_frame = ttk.Frame(notebook, style='Theme.TFrame')
-        notebook.add(legacy_frame, text="Legacy")
+        # === Haptic 标签页 (手柄震动参数) ===
+        haptic_tab_frame = ttk.Frame(notebook, style='Theme.TFrame')
+        notebook.add(haptic_tab_frame, text="Haptic")
         
-        # Adaptive trigger strength control
-        trigger_frame = ttk.Frame(legacy_frame, style='Theme.TFrame')
-        trigger_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=2)
-        trigger_frame.grid_columnconfigure(1, weight=1)
-        
-        ttk.Label(trigger_frame, text="Trigger Strength:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
-        trigger_scale = ttk.Scale(
-            trigger_frame,
-            from_=0.1,
-            to=2.0,
-            orient=tk.HORIZONTAL,
-            variable=self.trigger_strength,
-            command=lambda x: self.update_feedback_strength(format_target=self.trigger_value_label),
-            style='Theme.Horizontal.TScale'
+        # 添加说明文字
+        desc_label = ttk.Label(
+            haptic_tab_frame, 
+            text="控制手柄整体震动反馈（与扳机反馈独立）",
+            style='Theme.TLabel',
+            font=('Arial', 9, 'italic')
         )
-        trigger_scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
-        self.trigger_value_label = ttk.Label(trigger_frame, style='Theme.TLabel', width=5, anchor="e")
-        self.trigger_value_label.grid(row=0, column=2)
+        desc_label.grid(row=0, column=0, sticky="w", padx=10, pady=(5,10))
         
         # Haptic vibration strength control
-        haptic_frame = ttk.Frame(legacy_frame, style='Theme.TFrame')
+        haptic_frame = ttk.Frame(haptic_tab_frame, style='Theme.TFrame')
         haptic_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=2)
         haptic_frame.grid_columnconfigure(1, weight=1)
         
-        ttk.Label(haptic_frame, text="Haptic Strength:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
+        ttk.Label(haptic_frame, text="Vibration Strength:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
         haptic_scale = ttk.Scale(
             haptic_frame,
             from_=0,
             to=1.0,
             orient=tk.HORIZONTAL,
             variable=self.haptic_strength,
-            command=lambda x: self.update_feedback_strength(format_target=self.haptic_value_label),
+            command=lambda x: self.update_haptic_parameters(self.haptic_strength, "%.2f", "", self.haptic_value_label),
             style='Theme.Horizontal.TScale'
         )
         haptic_scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
-        self.haptic_value_label = ttk.Label(haptic_frame, style='Theme.TLabel', width=5, anchor="e")
+        self.haptic_value_label = ttk.Label(haptic_frame, text=f"{self.haptic_strength.get():.2f}", style='Theme.TLabel', width=8, anchor="e")
         self.haptic_value_label.grid(row=0, column=2)
         
-        # Tire slip detection threshold control
-        slip_frame = ttk.Frame(legacy_frame, style='Theme.TFrame')
+        # Simplified slip threshold control
+        slip_frame = ttk.Frame(haptic_tab_frame, style='Theme.TFrame')
         slip_frame.grid(row=2, column=0, sticky="ew", padx=5, pady=2)
         slip_frame.grid_columnconfigure(1, weight=1)
         
-        ttk.Label(slip_frame, text="Trigger Slip Threshold:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
+        ttk.Label(slip_frame, text="Slip Threshold:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
         slip_scale = ttk.Scale(
             slip_frame,
-            from_=1.0,
-            to=20.0,
+            from_=5.0,
+            to=30.0,
             orient=tk.HORIZONTAL,
             variable=self.wheel_slip_threshold,
-            command=lambda x: self.update_feedback_strength(format_target=self.slip_value_label),
+            command=lambda x: self.update_haptic_parameters(self.wheel_slip_threshold, "%.1f", "", self.slip_value_label),
             style='Theme.Horizontal.TScale'
         )
         slip_scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
-        self.slip_value_label = ttk.Label(slip_frame, style='Theme.TLabel', width=5, anchor="e")
+        self.slip_value_label = ttk.Label(slip_frame, text=f"{self.wheel_slip_threshold.get():.1f}", style='Theme.TLabel', width=8, anchor="e")
         self.slip_value_label.grid(row=0, column=2)
-        
-        # Trigger threshold control
-        trigger_threshold_frame = ttk.Frame(legacy_frame, style='Theme.TFrame')
-        trigger_threshold_frame.grid(row=3, column=0, sticky="ew", padx=5, pady=2)
-        trigger_threshold_frame.grid_columnconfigure(1, weight=1)
-        
-        ttk.Label(trigger_threshold_frame, text="Haptic Slip Threshold:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
-        threshold_scale = ttk.Scale(
-            trigger_threshold_frame,
-            from_=1.0,
-            to=20.0,
-            orient=tk.HORIZONTAL,
-            variable=self.trigger_threshold,
-            command=lambda x: self.update_feedback_strength(format_target=self.threshold_value_label),
-            style='Theme.Horizontal.TScale'
-        )
-        threshold_scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
-        self.threshold_value_label = ttk.Label(trigger_threshold_frame, style='Theme.TLabel', width=5, anchor="e")
-        self.threshold_value_label.grid(row=0, column=2)
-        
-        # Initialize display of all values
-        self.update_all_value_labels()
         
         # Add pause update button
         self.pause_button = ttk.Button(
@@ -1334,13 +1301,7 @@ class TelemetryDashboard:
         self.fps_label = ttk.Label(fps_frame, text=f"{min(self.fps_value.get(), 60.0):.0f}", style='Theme.TLabel', width=3)
         self.fps_label.pack(side=tk.LEFT)
     
-    def update_all_value_labels(self):
-        """Update display of all numerical labels"""
-        self.trigger_value_label.config(text=f"{self.trigger_strength.get():.1f}")
-        self.haptic_value_label.config(text=f"{self.haptic_strength.get():.1f}")
-        self.slip_value_label.config(text=f"{self.wheel_slip_threshold.get():.1f}")
-        self.threshold_value_label.config(text=f"{self.trigger_threshold.get():.1f}")
-    
+
     def toggle_pause_updates(self):
         """Toggle pause/resume update state"""
         self.pause_updates = not self.pause_updates
@@ -1383,7 +1344,7 @@ class TelemetryDashboard:
             to=to,
             orient=tk.HORIZONTAL,
             variable=variable,
-            command=lambda x: self.update_new_parameters(),
+            command=lambda x: self.update_new_parameters(variable, format_str, unit, value_label),
             style='Theme.Horizontal.TScale'
         )
         scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
@@ -1391,9 +1352,7 @@ class TelemetryDashboard:
         value_label = ttk.Label(frame, text=(format_str % variable.get()) + unit, style='Theme.TLabel', width=8, anchor="e")
         value_label.grid(row=0, column=2)
         
-        # 保存标签引用以便更新
-        attr_name = f"_{label_text.replace(' ', '_').replace(':', '').lower()}_label"
-        setattr(self, attr_name, value_label)
+        return value_label
     
     def save_config(self):
         """Save configuration to file"""
@@ -1413,7 +1372,26 @@ class TelemetryDashboard:
         except Exception as e:
             print(f"Error saving config: {e}")
     
-    def update_new_parameters(self, *args):
+    def update_haptic_parameters(self, variable, format_str, unit, label):
+        """更新Haptic震动参数"""
+        global haptic_strength, wheel_slip_threshold
+        
+        # 更新全局变量
+        haptic_strength = self.haptic_strength.get()
+        wheel_slip_threshold = self.wheel_slip_threshold.get()
+        
+        # 更新传入的标签显示
+        value = variable.get()
+        label.config(text=(format_str % value) + unit)
+        
+        # 保存到配置文件
+        config['Feedback']['haptic_strength'] = f"{haptic_strength:.2f}"
+        config['Feedback']['wheel_slip_threshold'] = f"{wheel_slip_threshold:.1f}"
+        
+        with open(config_path, 'w', encoding='utf-8') as configfile:
+            config.write(configfile)
+    
+    def update_new_parameters(self, variable, format_str, unit, label):
         """更新新的Brake/Throttle Slip参数"""
         global brake_threshold, brake_front_slip_threshold, brake_rear_slip_threshold
         global brake_feedback_strength, brake_amplitude, brake_min_frequency, brake_max_frequency
@@ -1437,24 +1415,9 @@ class TelemetryDashboard:
         throttle_min_frequency = self.throttle_min_frequency.get()
         throttle_max_frequency = self.throttle_max_frequency.get()
         
-        # 更新显示值
-        if hasattr(self, '_brake_threshold_label'):
-            self._brake_threshold_label.config(text=f"{brake_threshold:.1f}%")
-        if hasattr(self, '_front_slip_threshold_label'):
-            self._front_slip_threshold_label.config(text=f"{brake_front_slip_threshold:.1f}")
-        if hasattr(self, '_rear_slip_threshold_label'):
-            self._rear_slip_threshold_label.config(text=f"{brake_rear_slip_threshold:.1f}")
-        if hasattr(self, '_feedback_strength_label'):
-            self._feedback_strength_label.config(text=f"{brake_feedback_strength}")
-        if hasattr(self, '_amplitude_label'):
-            self._amplitude_label.config(text=f"{brake_amplitude}")
-        if hasattr(self, '_min_frequency_label'):
-            self._min_frequency_label.config(text=f"{brake_min_frequency} Hz")
-        if hasattr(self, '_max_frequency_label'):
-            self._max_frequency_label.config(text=f"{brake_max_frequency} Hz")
-        
-        if hasattr(self, '_throttle_threshold_label'):
-            self._throttle_threshold_label.config(text=f"{throttle_threshold:.1f}%")
+        # 更新传入的标签显示
+        value = variable.get()
+        label.config(text=(format_str % value) + unit)
         
         # 保存到配置文件
         config['BrakeSlip'] = {
@@ -2436,13 +2399,11 @@ use_gui_dashboard = config.getboolean('Features', 'use_gui_dashboard', fallback=
 trigger_strength = config.getfloat('Feedback', 'trigger_strength', fallback=1.0)
 haptic_strength = config.getfloat('Feedback', 'haptic_strength', fallback=1.0)
 wheel_slip_threshold = config.getfloat('Feedback', 'wheel_slip_threshold', fallback=10.0)
-trigger_threshold = config.getfloat('Feedback', 'trigger_threshold', fallback=1.0)
 
 # 确保值在合理范围内
 trigger_strength = max(0.1, min(2.0, trigger_strength))
-haptic_strength = max(0, min(1.0, haptic_strength))
-wheel_slip_threshold = max(1.0, min(20.0, wheel_slip_threshold))
-trigger_threshold = max(1.0, min(20.0, trigger_threshold))
+haptic_strength = max(0.0, min(1.0, haptic_strength))
+wheel_slip_threshold = max(5.0, min(30.0, wheel_slip_threshold))
 
 # 刹车滑移参数（BrakeSlip）
 brake_threshold = config.getfloat('BrakeSlip', 'brake_threshold', fallback=3.0)
@@ -2561,7 +2522,7 @@ last_config_mtime = os.path.getmtime(config_path) if os.path.exists(config_path)
 def reload_config_if_changed():
     """若 config.ini 已修改则重新加载，使运行时修改生效"""
     global adaptive_trigger_enabled, led_effect_enabled, haptic_effect_enabled, print_telemetry_enabled
-    global trigger_strength, haptic_strength, wheel_slip_threshold, trigger_threshold
+    global trigger_strength, haptic_strength, wheel_slip_threshold
     global brake_threshold, brake_front_slip_threshold, brake_rear_slip_threshold
     global brake_feedback_strength, brake_amplitude, brake_min_frequency, brake_max_frequency
     global throttle_threshold, throttle_front_slip_threshold, throttle_rear_slip_threshold
@@ -2579,9 +2540,8 @@ def reload_config_if_changed():
             haptic_effect_enabled = config.getboolean('Features', 'haptic_effect', fallback=True)
             print_telemetry_enabled = config.getboolean('Features', 'print_telemetry', fallback=True)
             trigger_strength = max(0.1, min(2.0, config.getfloat('Feedback', 'trigger_strength', fallback=1.0)))
-            haptic_strength = max(0, min(1.0, config.getfloat('Feedback', 'haptic_strength', fallback=1.0)))
-            wheel_slip_threshold = max(1.0, min(20.0, config.getfloat('Feedback', 'wheel_slip_threshold', fallback=10.0)))
-            trigger_threshold = max(1.0, min(20.0, config.getfloat('Feedback', 'trigger_threshold', fallback=10.0)))
+            haptic_strength = max(0.0, min(1.0, config.getfloat('Feedback', 'haptic_strength', fallback=1.0)))
+            wheel_slip_threshold = max(5.0, min(30.0, config.getfloat('Feedback', 'wheel_slip_threshold', fallback=10.0)))
             
             # 刹车滑移参数
             brake_threshold = max(0.1, min(99.0, config.getfloat('BrakeSlip', 'brake_threshold', fallback=3.0)))
@@ -3016,47 +2976,27 @@ while True:
                     if ground_speed * 3.6 > 5:  # Only calculate when moving faster than 5 km/h
                         # Calculate throttle vibration based on wheel spin
                         if throttle > 50:
-                            # Calculate maximum wheel spin using configured threshold
-                            max_spin = max(
-                                fl_slip if fl_slip > wheel_slip_threshold else 0,
-                                fr_slip if fr_slip > wheel_slip_threshold else 0,
-                                rl_slip if rl_slip > wheel_slip_threshold else 0,
-                                rr_slip if rr_slip > wheel_slip_threshold else 0
-                            )
+                            # Calculate maximum wheel spin
+                            max_spin = max(fl_slip, fr_slip, rl_slip, rr_slip)
                             
-                            # Apply vibration if spin exceeds trigger threshold
-                            if max_spin > trigger_threshold:
-                                # Calculate the intensity based on the maximum slip or lock
-                                max_slip_intensity = max(
-                                    min(1.0, (max_spin - trigger_threshold) / 50),
-                                    min(1.0, (max_spin - trigger_threshold) / 50)
-                                )
-                                # Apply the user's haptic strength setting
-                                final_intensity = max_slip_intensity * haptic_strength
-                                
-                                throttle_vibration = min(1.0, final_intensity)
+                            # Apply vibration if spin exceeds threshold
+                            if max_spin > wheel_slip_threshold:
+                                # Calculate intensity: (滑移率 - 阈值) / 50，归一化到0-1
+                                slip_intensity = min(1.0, (max_spin - wheel_slip_threshold) / 50.0)
+                                # Apply user's haptic strength setting
+                                throttle_vibration = slip_intensity * haptic_strength
                         
                         # Calculate brake vibration based on wheel lock
                         if brake > 30:
-                            # Calculate maximum wheel lock using configured threshold
-                            max_lock = max(
-                                abs(fl_slip) if fl_slip < -wheel_slip_threshold else 0,
-                                abs(fr_slip) if fr_slip < -wheel_slip_threshold else 0,
-                                abs(rl_slip) if rl_slip < -wheel_slip_threshold else 0,
-                                abs(rr_slip) if rr_slip < -wheel_slip_threshold else 0
-                            )
+                            # Calculate maximum wheel lock (负值取绝对值)
+                            max_lock = max(abs(fl_slip), abs(fr_slip), abs(rl_slip), abs(rr_slip))
                             
-                            # Apply vibration if lock exceeds trigger threshold
-                            if max_lock > trigger_threshold:
-                                # Calculate the intensity based on the maximum slip or lock
-                                max_slip_intensity = max(
-                                    min(1.0, (max_lock - trigger_threshold) / 50),
-                                    min(1.0, (max_lock - trigger_threshold) / 50)
-                                )
-                                # Apply the user's haptic strength setting
-                                final_intensity = max_slip_intensity * haptic_strength
-                                
-                                brake_vibration = min(1.0, final_intensity)
+                            # Apply vibration if lock exceeds threshold
+                            if max_lock > wheel_slip_threshold:
+                                # Calculate intensity: (锁死率 - 阈值) / 50，归一化到0-1
+                                lock_intensity = min(1.0, (max_lock - wheel_slip_threshold) / 50.0)
+                                # Apply user's haptic strength setting
+                                brake_vibration = lock_intensity * haptic_strength
                     
                     # Update dashboard with all telemetry data
                     dashboard.update_values({
