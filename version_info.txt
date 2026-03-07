@@ -5,8 +5,8 @@
 
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 5, 2, 0),
-    prodvers=(1, 5, 2, 0),
+    filevers=(1, 5, 3, 0),
+    prodvers=(1, 5, 3, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -21,7 +21,7 @@ VSVersionInfo(
         u'040904B0',
         [StringStruct(u'CompanyName', u''),
         StringStruct(u'FileDescription', u'RBR DualSense Adapter - Richard Burns Rally 自适应扳机与 DualSense 手柄适配'),
-        StringStruct(u'FileVersion', u'1.5.2.0'),
+        StringStruct(u'FileVersion', u'1.5.3.0'),
         StringStruct(u'InternalName', u'RBR_DualSense_Adapter'),
         StringStruct(u'LegalCopyright', u''),
         StringStruct(u'OriginalFilename', u'RBR_DualSense_Adapter.exe'),

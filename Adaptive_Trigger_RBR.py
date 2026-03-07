@@ -1,6 +1,6 @@
 """
 RBR DualSense Adapter - Richard Burns Rally 自适应扳机与 DualSense 手柄适配
-Version 1.5.2
+Version 1.5.3
 """
 import socket
 import json
@@ -12,7 +12,7 @@ import sys
 import configparser
 import psutil  # Add this import for process handling
 
-__version__ = '1.5.2'
+__version__ = '1.5.3'
 
 # pydirectinput for game key simulation; keyboard for global hotkey (preset switch)
 try:
