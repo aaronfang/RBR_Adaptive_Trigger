@@ -12,7 +12,7 @@ import sys
 import configparser
 import psutil  # Add this import for process handling
 
-__version__ = '1.5.3'
+__version__ = '1.5.4'
 
 # pydirectinput for game key simulation; keyboard for global hotkey (preset switch)
 try:
@@ -778,8 +778,8 @@ class TelemetryOverlay:
 class TelemetryDashboard:
     def __init__(self, root):
         self.root = root
-        self.root.title("RBR Telemetry Dashboard")
-        self.root.geometry("700x620")
+        self.root.title("RBR DualSense Adapter - Richard Burns Rally")
+        self.root.geometry("800x635")
         
         # Initialize in-game overlay
         if WINDOWS_API_AVAILABLE:
@@ -1184,8 +1184,9 @@ class TelemetryDashboard:
         notebook.grid(row=3, column=0, sticky="ew", padx=5, pady=5)
         
         # === Brake Slip 标签页 ===
-        brake_frame = ttk.Frame(notebook, style='Theme.TFrame')
+        brake_frame = ttk.Frame(notebook, style='Theme.TFrame', padding=10)
         notebook.add(brake_frame, text="Brake Slip")
+        brake_frame.grid_columnconfigure(0, weight=1)  # 让滑杆可以充分扩展
         
         row_idx = 0
         self._create_rbr_slider(brake_frame, row_idx, "Brake Threshold:", self.brake_threshold, 0.1, 99.0, "%.1f", "%")
@@ -1203,8 +1204,9 @@ class TelemetryDashboard:
         self._create_rbr_slider(brake_frame, row_idx, "Max Frequency:", self.brake_max_frequency, 20, 150, "%d", " Hz")
         
         # === Throttle Slip 标签页 ===
-        throttle_frame = ttk.Frame(notebook, style='Theme.TFrame')
+        throttle_frame = ttk.Frame(notebook, style='Theme.TFrame', padding=10)
         notebook.add(throttle_frame, text="Throttle Slip")
+        throttle_frame.grid_columnconfigure(0, weight=1)  # 让滑杆可以充分扩展
         
         row_idx = 0
         self._create_rbr_slider(throttle_frame, row_idx, "Throttle Threshold:", self.throttle_threshold, 0.1, 99.0, "%.1f", "%")
@@ -1222,8 +1224,9 @@ class TelemetryDashboard:
         self._create_rbr_slider(throttle_frame, row_idx, "Max Frequency:", self.throttle_max_frequency, 20, 150, "%d", " Hz")
         
         # === Haptic 标签页 (手柄震动参数) ===
-        haptic_tab_frame = ttk.Frame(notebook, style='Theme.TFrame')
+        haptic_tab_frame = ttk.Frame(notebook, style='Theme.TFrame', padding=10)
         notebook.add(haptic_tab_frame, text="Haptic")
+        haptic_tab_frame.grid_columnconfigure(0, weight=1)  # 让内容可以充分扩展
         
         # 添加说明文字
         desc_label = ttk.Label(
@@ -1247,7 +1250,8 @@ class TelemetryDashboard:
             orient=tk.HORIZONTAL,
             variable=self.haptic_strength,
             command=lambda x: self.update_haptic_parameters(self.haptic_strength, "%.2f", "", self.haptic_value_label),
-            style='Theme.Horizontal.TScale'
+            style='Theme.Horizontal.TScale',
+            length=400  # 增加滑杆长度
         )
         haptic_scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
         self.haptic_value_label = ttk.Label(haptic_frame, text=f"{self.haptic_strength.get():.2f}", style='Theme.TLabel', width=8, anchor="e")
@@ -1266,7 +1270,8 @@ class TelemetryDashboard:
             orient=tk.HORIZONTAL,
             variable=self.wheel_slip_threshold,
             command=lambda x: self.update_haptic_parameters(self.wheel_slip_threshold, "%.1f", "", self.slip_value_label),
-            style='Theme.Horizontal.TScale'
+            style='Theme.Horizontal.TScale',
+            length=400  # 增加滑杆长度
         )
         slip_scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
         self.slip_value_label = ttk.Label(slip_frame, text=f"{self.wheel_slip_threshold.get():.1f}", style='Theme.TLabel', width=8, anchor="e")
@@ -1345,7 +1350,8 @@ class TelemetryDashboard:
             orient=tk.HORIZONTAL,
             variable=variable,
             command=lambda x: self.update_new_parameters(variable, format_str, unit, value_label),
-            style='Theme.Horizontal.TScale'
+            style='Theme.Horizontal.TScale',
+            length=400  # 增加滑杆长度以便微调参数
         )
         scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
         
@@ -2191,7 +2197,10 @@ class TelemetryDashboard:
                 
                 # Destroy in-game overlay
                 if hasattr(app, 'overlay') and app.overlay is not None:
-                    app.overlay.destroy()
+                    try:
+                        app.overlay.destroy()
+                    except:
+                        pass
                 
                 # Give threads some time to clean up
                 time.sleep(0.2)
@@ -2203,6 +2212,10 @@ class TelemetryDashboard:
                     pass
                 
                 print("Application shutdown complete")
+                
+                # 强制退出程序以关闭cmd窗口
+                # 使用os._exit()而不是sys.exit(),确保立即终止所有线程和进程
+                os._exit(0)
             
             root.protocol("WM_DELETE_WINDOW", on_closing)
             
@@ -2254,20 +2267,20 @@ else:
         'brake_threshold': '3.0',           # 刹车输入阈值 % (0.1-99)
         'front_slip_threshold': '5.0',      # 前轮滑移率阈值 (1.0-20.0)
         'rear_slip_threshold': '5.0',       # 后轮滑移率阈值 (1.0-20.0)
-        'feedback_strength': '7',           # 反馈强度 (1-8)
-        'amplitude': '5',                   # 震动振幅 (1-8)
-        'min_frequency': '25',              # 最小频率 Hz (1-50)
-        'max_frequency': '85',              # 最大频率 Hz (20-150)
+        'feedback_strength': '5',           # 反馈强度 (1-8)
+        'amplitude': '6',                   # 震动振幅 (1-8)
+        'min_frequency': '20',              # 最小频率 Hz (1-50)
+        'max_frequency': '70',              # 最大频率 Hz (20-150)
     }
     # 油门滑移反馈参数 (Throttle Slip)
     config['ThrottleSlip'] = {
         'throttle_threshold': '3.0',        # 油门输入阈值 % (0.1-99)
-        'front_slip_threshold': '5.0',      # 前轮滑移率阈值 (1.0-20.0)
-        'rear_slip_threshold': '5.0',       # 后轮滑移率阈值 (1.0-20.0)
-        'feedback_strength': '8',           # 反馈强度 (1-8)
-        'amplitude': '4',                   # 震动振幅 (1-8)
-        'min_frequency': '30',              # 最小频率 Hz (1-50)
-        'max_frequency': '96',              # 最大频率 Hz (20-150)
+        'front_slip_threshold': '7.0',      # 前轮滑移率阈值 (1.0-20.0)
+        'rear_slip_threshold': '7.0',       # 后轮滑移率阈值 (1.0-20.0)
+        'feedback_strength': '5',           # 反馈强度 (1-8)
+        'amplitude': '6',                   # 震动振幅 (1-8)
+        'min_frequency': '20',              # 最小频率 Hz (1-50)
+        'max_frequency': '70',              # 最大频率 Hz (20-150)
     }
     # 传统参数(向后兼容)
     config['Feedback'] = {
@@ -2403,19 +2416,19 @@ wheel_slip_threshold = max(5.0, min(30.0, wheel_slip_threshold))
 brake_threshold = config.getfloat('BrakeSlip', 'brake_threshold', fallback=3.0)
 brake_front_slip_threshold = config.getfloat('BrakeSlip', 'front_slip_threshold', fallback=5.0)
 brake_rear_slip_threshold = config.getfloat('BrakeSlip', 'rear_slip_threshold', fallback=5.0)
-brake_feedback_strength = config.getint('BrakeSlip', 'feedback_strength', fallback=7)
-brake_amplitude = config.getint('BrakeSlip', 'amplitude', fallback=5)
-brake_min_frequency = config.getint('BrakeSlip', 'min_frequency', fallback=25)
-brake_max_frequency = config.getint('BrakeSlip', 'max_frequency', fallback=85)
+brake_feedback_strength = config.getint('BrakeSlip', 'feedback_strength', fallback=5)
+brake_amplitude = config.getint('BrakeSlip', 'amplitude', fallback=6)
+brake_min_frequency = config.getint('BrakeSlip', 'min_frequency', fallback=20)
+brake_max_frequency = config.getint('BrakeSlip', 'max_frequency', fallback=70)
 
 # 油门滑移参数（ThrottleSlip）
 throttle_threshold = config.getfloat('ThrottleSlip', 'throttle_threshold', fallback=3.0)
-throttle_front_slip_threshold = config.getfloat('ThrottleSlip', 'front_slip_threshold', fallback=5.0)
-throttle_rear_slip_threshold = config.getfloat('ThrottleSlip', 'rear_slip_threshold', fallback=5.0)
-throttle_feedback_strength = config.getint('ThrottleSlip', 'feedback_strength', fallback=8)
-throttle_amplitude = config.getint('ThrottleSlip', 'amplitude', fallback=4)
-throttle_min_frequency = config.getint('ThrottleSlip', 'min_frequency', fallback=30)
-throttle_max_frequency = config.getint('ThrottleSlip', 'max_frequency', fallback=96)
+throttle_front_slip_threshold = config.getfloat('ThrottleSlip', 'front_slip_threshold', fallback=7.0)
+throttle_rear_slip_threshold = config.getfloat('ThrottleSlip', 'rear_slip_threshold', fallback=7.0)
+throttle_feedback_strength = config.getint('ThrottleSlip', 'feedback_strength', fallback=5)
+throttle_amplitude = config.getint('ThrottleSlip', 'amplitude', fallback=6)
+throttle_min_frequency = config.getint('ThrottleSlip', 'min_frequency', fallback=20)
+throttle_max_frequency = config.getint('ThrottleSlip', 'max_frequency', fallback=70)
 
 # 确保新参数值在合理范围内
 brake_threshold = max(0.1, min(99.0, brake_threshold))
@@ -2581,6 +2594,19 @@ if use_gui_dashboard:
         global dashboard
         root = tk.Tk()
         dashboard = TelemetryDashboard(root)
+        
+        # Handle window close event
+        def on_closing():
+            print("Window closing, shutting down application...")
+            try:
+                root.destroy()
+            except:
+                pass
+            print("Application shutdown complete")
+            # 强制退出整个程序(包括主循环)以关闭cmd窗口
+            os._exit(0)
+        
+        root.protocol("WM_DELETE_WINDOW", on_closing)
         root.mainloop()
     
     dashboard_thread = threading.Thread(target=start_dashboard, daemon=True)
