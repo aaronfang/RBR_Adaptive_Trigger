@@ -841,6 +841,7 @@ class TelemetryDashboard:
         self.brake_amplitude = tk.IntVar(value=brake_amplitude)
         self.brake_min_frequency = tk.IntVar(value=brake_min_frequency)
         self.brake_max_frequency = tk.IntVar(value=brake_max_frequency)
+        self.brake_reverse_frequency_mode = tk.BooleanVar(value=brake_reverse_frequency_mode)
         
         # 油门滑移参数变量 (Throttle Slip)
         self.throttle_threshold = tk.DoubleVar(value=throttle_threshold)
@@ -850,6 +851,7 @@ class TelemetryDashboard:
         self.throttle_amplitude = tk.IntVar(value=throttle_amplitude)
         self.throttle_min_frequency = tk.IntVar(value=throttle_min_frequency)
         self.throttle_max_frequency = tk.IntVar(value=throttle_max_frequency)
+        self.throttle_reverse_frequency_mode = tk.BooleanVar(value=throttle_reverse_frequency_mode)
         
         # Add feature toggle variables
         self.adaptive_trigger_enabled = tk.BooleanVar(value=adaptive_trigger_enabled)
@@ -1202,6 +1204,17 @@ class TelemetryDashboard:
         self._create_rbr_slider(brake_frame, row_idx, "Min Frequency:", self.brake_min_frequency, 1, 50, "%d", " Hz")
         row_idx += 1
         self._create_rbr_slider(brake_frame, row_idx, "Max Frequency:", self.brake_max_frequency, 20, 150, "%d", " Hz")
+        row_idx += 1
+        
+        # 反转频率模式复选框
+        brake_reverse_checkbox = ttk.Checkbutton(
+            brake_frame,
+            text="反转频率模式 (轻微滑移→高频, 严重滑移→低频)",
+            variable=self.brake_reverse_frequency_mode,
+            command=lambda: self.update_new_parameters(self.brake_reverse_frequency_mode, "%d", "", None),
+            style='Theme.TCheckbutton'
+        )
+        brake_reverse_checkbox.grid(row=row_idx, column=0, sticky="w", pady=(10, 5))
         
         # === Throttle Slip 标签页 ===
         throttle_frame = ttk.Frame(notebook, style='Theme.TFrame', padding=10)
@@ -1222,6 +1235,17 @@ class TelemetryDashboard:
         self._create_rbr_slider(throttle_frame, row_idx, "Min Frequency:", self.throttle_min_frequency, 1, 50, "%d", " Hz")
         row_idx += 1
         self._create_rbr_slider(throttle_frame, row_idx, "Max Frequency:", self.throttle_max_frequency, 20, 150, "%d", " Hz")
+        row_idx += 1
+        
+        # 反转频率模式复选框
+        throttle_reverse_checkbox = ttk.Checkbutton(
+            throttle_frame,
+            text="反转频率模式 (轻微滑移→高频, 严重滑移→低频)",
+            variable=self.throttle_reverse_frequency_mode,
+            command=lambda: self.update_new_parameters(self.throttle_reverse_frequency_mode, "%d", "", None),
+            style='Theme.TCheckbutton'
+        )
+        throttle_reverse_checkbox.grid(row=row_idx, column=0, sticky="w", pady=(10, 5))
         
         # === Haptic 标签页 (手柄震动参数) ===
         haptic_tab_frame = ttk.Frame(notebook, style='Theme.TFrame', padding=10)
@@ -1400,9 +1424,9 @@ class TelemetryDashboard:
     def update_new_parameters(self, variable, format_str, unit, label):
         """更新新的Brake/Throttle Slip参数"""
         global brake_threshold, brake_front_slip_threshold, brake_rear_slip_threshold
-        global brake_feedback_strength, brake_amplitude, brake_min_frequency, brake_max_frequency
+        global brake_feedback_strength, brake_amplitude, brake_min_frequency, brake_max_frequency, brake_reverse_frequency_mode
         global throttle_threshold, throttle_front_slip_threshold, throttle_rear_slip_threshold
-        global throttle_feedback_strength, throttle_amplitude, throttle_min_frequency, throttle_max_frequency
+        global throttle_feedback_strength, throttle_amplitude, throttle_min_frequency, throttle_max_frequency, throttle_reverse_frequency_mode
         
         # 更新全局变量
         brake_threshold = self.brake_threshold.get()
@@ -1412,6 +1436,7 @@ class TelemetryDashboard:
         brake_amplitude = self.brake_amplitude.get()
         brake_min_frequency = self.brake_min_frequency.get()
         brake_max_frequency = self.brake_max_frequency.get()
+        brake_reverse_frequency_mode = self.brake_reverse_frequency_mode.get()
         
         throttle_threshold = self.throttle_threshold.get()
         throttle_front_slip_threshold = self.throttle_front_slip_threshold.get()
@@ -1420,10 +1445,12 @@ class TelemetryDashboard:
         throttle_amplitude = self.throttle_amplitude.get()
         throttle_min_frequency = self.throttle_min_frequency.get()
         throttle_max_frequency = self.throttle_max_frequency.get()
+        throttle_reverse_frequency_mode = self.throttle_reverse_frequency_mode.get()
         
         # 更新传入的标签显示
-        value = variable.get()
-        label.config(text=(format_str % value) + unit)
+        if label is not None:  # 允许label为None（用于复选框）
+            value = variable.get()
+            label.config(text=(format_str % value) + unit)
         
         # 保存到配置文件
         config['BrakeSlip'] = {
@@ -1433,7 +1460,8 @@ class TelemetryDashboard:
             'feedback_strength': str(brake_feedback_strength),
             'amplitude': str(brake_amplitude),
             'min_frequency': str(brake_min_frequency),
-            'max_frequency': str(brake_max_frequency)
+            'max_frequency': str(brake_max_frequency),
+            'reverse_frequency_mode': str(brake_reverse_frequency_mode)
         }
         
         config['ThrottleSlip'] = {
@@ -1443,7 +1471,8 @@ class TelemetryDashboard:
             'feedback_strength': str(throttle_feedback_strength),
             'amplitude': str(throttle_amplitude),
             'min_frequency': str(throttle_min_frequency),
-            'max_frequency': str(throttle_max_frequency)
+            'max_frequency': str(throttle_max_frequency),
+            'reverse_frequency_mode': str(throttle_reverse_frequency_mode)
         }
         
         self.save_config()
@@ -2271,6 +2300,7 @@ else:
         'amplitude': '6',                   # 震动振幅 (1-8)
         'min_frequency': '20',              # 最小频率 Hz (1-50)
         'max_frequency': '70',              # 最大频率 Hz (20-150)
+        'reverse_frequency_mode': 'False',  # 反转频率模式：True=轻微滑移高频/严重滑移低频
     }
     # 油门滑移反馈参数 (Throttle Slip)
     config['ThrottleSlip'] = {
@@ -2281,6 +2311,7 @@ else:
         'amplitude': '6',                   # 震动振幅 (1-8)
         'min_frequency': '20',              # 最小频率 Hz (1-50)
         'max_frequency': '70',              # 最大频率 Hz (20-150)
+        'reverse_frequency_mode': 'False',  # 反转频率模式：True=轻微滑移高频/严重滑移低频
     }
     # 传统参数(向后兼容)
     config['Feedback'] = {
@@ -2374,6 +2405,7 @@ if not config.has_section('BrakeSlip'):
         'amplitude': '5',
         'min_frequency': '25',
         'max_frequency': '85',
+        'reverse_frequency_mode': 'False',
     }
     config_updated = True
 
@@ -2386,6 +2418,7 @@ if not config.has_section('ThrottleSlip'):
         'amplitude': '4',
         'min_frequency': '30',
         'max_frequency': '96',
+        'reverse_frequency_mode': 'False',
     }
     config_updated = True
 
@@ -2420,6 +2453,7 @@ brake_feedback_strength = config.getint('BrakeSlip', 'feedback_strength', fallba
 brake_amplitude = config.getint('BrakeSlip', 'amplitude', fallback=6)
 brake_min_frequency = config.getint('BrakeSlip', 'min_frequency', fallback=20)
 brake_max_frequency = config.getint('BrakeSlip', 'max_frequency', fallback=70)
+brake_reverse_frequency_mode = config.getboolean('BrakeSlip', 'reverse_frequency_mode', fallback=False)
 
 # 油门滑移参数（ThrottleSlip）
 throttle_threshold = config.getfloat('ThrottleSlip', 'throttle_threshold', fallback=3.0)
@@ -2429,6 +2463,7 @@ throttle_feedback_strength = config.getint('ThrottleSlip', 'feedback_strength', 
 throttle_amplitude = config.getint('ThrottleSlip', 'amplitude', fallback=6)
 throttle_min_frequency = config.getint('ThrottleSlip', 'min_frequency', fallback=20)
 throttle_max_frequency = config.getint('ThrottleSlip', 'max_frequency', fallback=70)
+throttle_reverse_frequency_mode = config.getboolean('ThrottleSlip', 'reverse_frequency_mode', fallback=False)
 
 # 确保新参数值在合理范围内
 brake_threshold = max(0.1, min(99.0, brake_threshold))
@@ -3147,7 +3182,13 @@ while True:
                         )
                         
                         # 2) VIBRATION 模式 - 提供震动反馈
-                        freq = int(brake_min_frequency + (brake_max_frequency - brake_min_frequency) * percentage)
+                        # 根据反转频率模式计算频率
+                        if brake_reverse_frequency_mode:
+                            # 反转模式：轻微滑移→高频，严重滑移→低频
+                            freq = int(brake_max_frequency - (brake_max_frequency - brake_min_frequency) * percentage)
+                        else:
+                            # 正常模式：轻微滑移→低频，严重滑移→高频
+                            freq = int(brake_min_frequency + (brake_max_frequency - brake_min_frequency) * percentage)
                         freq = max(brake_min_frequency, min(brake_max_frequency, freq))
                         
                         packet.instructions.append(
@@ -3184,7 +3225,13 @@ while True:
                         )
                         
                         # 2) VIBRATION 模式 - 提供震动反馈
-                        freq = int(throttle_min_frequency + (throttle_max_frequency - throttle_min_frequency) * percentage)
+                        # 根据反转频率模式计算频率
+                        if throttle_reverse_frequency_mode:
+                            # 反转模式：轻微滑移→高频，严重滑移→低频
+                            freq = int(throttle_max_frequency - (throttle_max_frequency - throttle_min_frequency) * percentage)
+                        else:
+                            # 正常模式：轻微滑移→低频，严重滑移→高频
+                            freq = int(throttle_min_frequency + (throttle_max_frequency - throttle_min_frequency) * percentage)
                         freq = max(throttle_min_frequency, min(throttle_max_frequency, freq))
                         
                         packet.instructions.append(
