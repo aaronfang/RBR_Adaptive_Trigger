@@ -1,6 +1,6 @@
 """
 RBR DualSense Adapter - Richard Burns Rally 自适应扳机与 DualSense 手柄适配
-Version 1.5.3
+Version 1.5.5
 """
 import socket
 import json
@@ -12,7 +12,7 @@ import sys
 import configparser
 import psutil  # Add this import for process handling
 
-__version__ = '1.5.4'
+__version__ = '1.5.5'
 
 # pydirectinput for game key simulation; keyboard for global hotkey (preset switch)
 try:
@@ -567,13 +567,7 @@ class TelemetryOverlay:
         # Save configuration callback
         self.save_callback = None
         
-    def set_opacity(self, opacity):
-        """Set overlay background opacity (0.0-1.0)"""
-        self.bg_opacity = float(opacity)
-        if self.window:
-            self.window.attributes('-alpha', self.bg_opacity)
-        self.redraw()
-        
+
     def create_window(self):
         """Create overlay window"""
         if self.window:
@@ -786,13 +780,6 @@ class TelemetryDashboard:
             self.overlay = TelemetryOverlay()
             # Load floating window position from configuration
             self.overlay.load_position(config)
-            # Load opacity setting from configuration
-            if 'UI' in config and 'overlay_opacity' in config['UI']:
-                try:
-                    opacity = float(config['UI']['overlay_opacity'])
-                    self.overlay.bg_opacity = opacity
-                except (ValueError, TypeError):
-                    pass  # Use default opacity if invalid value in config
             # Set callback function to save configuration
             self.overlay.save_callback = self.save_config
             
@@ -1089,20 +1076,6 @@ class TelemetryDashboard:
             style='Theme.TCheckbutton'
         )
         theme_cb.pack(side=tk.LEFT, padx=5)
-        
-        # Overlay opacity control
-        ttk.Label(self.control_panel, text="Opacity:", style='Theme.TLabel').pack(side=tk.LEFT, padx=(10, 0))
-        self.opacity_scale = ttk.Scale(
-            self.control_panel, 
-            from_=0.1, 
-            to=1.0, 
-            orient=tk.HORIZONTAL, 
-            length=100,
-            value=0.7,
-            command=self.change_opacity,
-            style='Theme.Horizontal.TScale'
-        )
-        self.opacity_scale.pack(side=tk.LEFT, padx=5)
         
         # Create feedback control panel
         self.feedback_frame, content = self.create_collapsible_frame(
@@ -1583,16 +1556,7 @@ class TelemetryDashboard:
         # Save configuration
         self.save_config()
     
-    def change_opacity(self, value):
-        """Change overlay background opacity"""
-        if hasattr(self, 'overlay') and self.overlay is not None:
-            self.overlay.set_opacity(float(value))
-            # Save opacity setting to config
-            if 'UI' not in config:
-                config['UI'] = {}
-            config['UI']['overlay_opacity'] = str(value)
-            self.save_config()
-    
+
     def toggle_theme(self):
         """切换深色/浅色主题"""
         theme = 'dark' if self.is_dark_theme.get() else 'light'
