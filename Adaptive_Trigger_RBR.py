@@ -1,6 +1,6 @@
 """
 RBR DualSense Adapter - Richard Burns Rally 自适应扳机与 DualSense 手柄适配
-Version 1.5.5
+Version 1.5.6
 """
 import socket
 import json
