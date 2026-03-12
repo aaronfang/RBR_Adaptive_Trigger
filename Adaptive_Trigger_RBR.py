@@ -35,6 +35,38 @@ import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
+# ToolTip class for hover hints
+class ToolTip:
+    """创建鼠标悬停提示的工具类"""
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip_window = None
+        self.widget.bind("<Enter>", self.show_tooltip)
+        self.widget.bind("<Leave>", self.hide_tooltip)
+    
+    def show_tooltip(self, event=None):
+        if self.tooltip_window or not self.text:
+            return
+        
+        x, y, _, _ = self.widget.bbox("insert") if hasattr(self.widget, 'bbox') else (0, 0, 0, 0)
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 25
+        
+        self.tooltip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        
+        label = tk.Label(tw, text=self.text, justify=tk.LEFT,
+                        background="#ffffe0", relief=tk.SOLID, borderwidth=1,
+                        font=("Arial", 9), wraplength=300)
+        label.pack()
+    
+    def hide_tooltip(self, event=None):
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
+
 # Try to import Windows-specific modules, provide alternatives if not available
 try:
     import win32gui
@@ -773,7 +805,7 @@ class TelemetryDashboard:
     def __init__(self, root):
         self.root = root
         self.root.title("RBR DualSense Adapter - Richard Burns Rally")
-        self.root.geometry("800x635")
+        self.root.geometry("800x680")
         
         # Initialize in-game overlay
         if WINDOWS_API_AVAILABLE:
@@ -829,6 +861,7 @@ class TelemetryDashboard:
         self.brake_min_frequency = tk.IntVar(value=brake_min_frequency)
         self.brake_max_frequency = tk.IntVar(value=brake_max_frequency)
         self.brake_reverse_frequency_mode = tk.BooleanVar(value=brake_reverse_frequency_mode)
+        self.brake_use_automatic_gun = tk.BooleanVar(value=brake_use_automatic_gun)
         
         # 油门滑移参数变量 (Throttle Slip)
         self.throttle_threshold = tk.DoubleVar(value=throttle_threshold)
@@ -839,6 +872,7 @@ class TelemetryDashboard:
         self.throttle_min_frequency = tk.IntVar(value=throttle_min_frequency)
         self.throttle_max_frequency = tk.IntVar(value=throttle_max_frequency)
         self.throttle_reverse_frequency_mode = tk.BooleanVar(value=throttle_reverse_frequency_mode)
+        self.throttle_use_automatic_gun = tk.BooleanVar(value=throttle_use_automatic_gun)
         
         # Add feature toggle variables
         self.adaptive_trigger_enabled = tk.BooleanVar(value=adaptive_trigger_enabled)
@@ -1111,6 +1145,7 @@ class TelemetryDashboard:
             style='Theme.TCheckbutton'
         )
         adaptive_trigger_cb.pack(side=tk.LEFT, padx=(0, 15))
+        ToolTip(adaptive_trigger_cb, "自适应扳机效果开关\n根据刹车抱死和油门打滑情况\n动态调整L2/R2扳机的震动反馈")
         
         # Haptic feedback toggle
         haptic_effect_cb = ttk.Checkbutton(
@@ -1121,6 +1156,7 @@ class TelemetryDashboard:
             style='Theme.TCheckbutton'
         )
         haptic_effect_cb.pack(side=tk.LEFT, padx=(0, 15))
+        ToolTip(haptic_effect_cb, "手柄整体震动反馈\n在轮胎打滑/抱死时触发\n使用手柄内置震动马达")
         
         # LED effect toggle
         led_effect_cb = ttk.Checkbutton(
@@ -1131,14 +1167,26 @@ class TelemetryDashboard:
             style='Theme.TCheckbutton'
         )
         led_effect_cb.pack(side=tk.LEFT)
+        ToolTip(led_effect_cb, "LED灯光效果开关\n根据转速/档位变化调整灯光颜色")
         
         # 自动换挡配置: 4个单选按钮
         gear_shift_frame = ttk.Frame(content, style='Theme.TFrame')
         gear_shift_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=(10, 2))
         gear_shift_frame.grid_columnconfigure(1, weight=1)
-        ttk.Label(gear_shift_frame, text="自动换挡:", style='Theme.TLabel').grid(row=0, column=0, sticky="w", padx=(0, 10))
+        gear_label = ttk.Label(gear_shift_frame, text="自动换挡:", style='Theme.TLabel')
+        gear_label.grid(row=0, column=0, sticky="w", padx=(0, 10))
+        ToolTip(gear_label, "自动换挡模式选择\n根据转速自动升降档\n• 关闭: 手动换挡\n• 配置1/2/3: 不同的升降档转速策略\n可在config.ini中自定义每个配置的转速参数")
+        
         gear_radios_frame = ttk.Frame(gear_shift_frame, style='Theme.TFrame')
         gear_radios_frame.grid(row=0, column=1, sticky="w")
+        
+        gear_tooltips = [
+            "关闭自动换挡\n完全手动控制档位",
+            "自动换挡配置1\n适合普通车辆\n可在config.ini的[GearShiftPreset1]中自定义",
+            "自动换挡配置2\n适合高性能车辆\n可在config.ini的[GearShiftPreset2]中自定义",
+            "自动换挡配置3\n适合赛车\n可在config.ini的[GearShiftPreset3]中自定义"
+        ]
+        
         for i, label in enumerate(["关闭", "配置1", "配置2", "配置3"]):
             rb = ttk.Radiobutton(
                 gear_radios_frame,
@@ -1149,6 +1197,7 @@ class TelemetryDashboard:
                 style='Theme.TCheckbutton'
             )
             rb.pack(side=tk.LEFT, padx=(0, 12))
+            ToolTip(rb, gear_tooltips[i])
         
         # Add separator
         separator = ttk.Separator(content, orient="horizontal")
@@ -1164,30 +1213,47 @@ class TelemetryDashboard:
         brake_frame.grid_columnconfigure(0, weight=1)  # 让滑杆可以充分扩展
         
         row_idx = 0
-        self._create_rbr_slider(brake_frame, row_idx, "Brake Threshold:", self.brake_threshold, 0.1, 99.0, "%.1f", "%")
+        self._create_rbr_slider(brake_frame, row_idx, "Brake Threshold:", self.brake_threshold, 0.1, 99.0, "%.1f", "%",
+                                tooltip="刹车踏板触发阈值\n只有当刹车超过此百分比时才会检测车轮抱死\n推荐: 3-30% (默认3%)")
         row_idx += 1
-        self._create_rbr_slider(brake_frame, row_idx, "Front Slip Threshold:", self.brake_front_slip_threshold, 1.0, 20.0, "%.1f", "")
+        self._create_rbr_slider(brake_frame, row_idx, "Front Slip Threshold:", self.brake_front_slip_threshold, 1.0, 20.0, "%.1f", "",
+                                tooltip="前轮抱死触发阈值 (单位: %)\n前轮滑移率超过此值时触发扳机震动\n• 1-3%: 极敏感,适合追求极限刹车\n• 5-8%: 平衡设置,推荐大多数人\n• 10-20%: 只在严重抱死时触发\n当前默认: 5%")
         row_idx += 1
-        self._create_rbr_slider(brake_frame, row_idx, "Rear Slip Threshold:", self.brake_rear_slip_threshold, 1.0, 20.0, "%.1f", "")
+        self._create_rbr_slider(brake_frame, row_idx, "Rear Slip Threshold:", self.brake_rear_slip_threshold, 1.0, 20.0, "%.1f", "",
+                                tooltip="后轮抱死触发阈值 (单位: %)\n后轮滑移率超过此值时触发扳机震动\n• 后轮抱死会导致转向失控\n• 设置建议同前轮\n当前默认: 5%")
         row_idx += 1
-        self._create_rbr_slider(brake_frame, row_idx, "Feedback Strength:", self.brake_feedback_strength, 1, 8, "%d", "")
+        self._create_rbr_slider(brake_frame, row_idx, "Amplitude:", self.brake_amplitude, 1, 8, "%d", "",
+                                tooltip="扳机震动强度 (1-8级)\n控制扳机震动的振幅大小\n• 1-3: 轻柔震动\n• 4-6: 中等震动 (推荐)\n• 7-8: 强烈震动\n当前默认: 6")
         row_idx += 1
-        self._create_rbr_slider(brake_frame, row_idx, "Amplitude:", self.brake_amplitude, 1, 8, "%d", "")
+        self._create_rbr_slider(brake_frame, row_idx, "Min Frequency:", self.brake_min_frequency, 1, 50, "%d", " Hz",
+                                tooltip="扳机震动最低频率 (1-50 Hz)\n轻微抱死时的震动频率\n• 1-10 Hz: 低沉震动\n• 10-30 Hz: 中频震动 (推荐)\n• 30-50 Hz: 高频震动\n当前默认: 20 Hz")
         row_idx += 1
-        self._create_rbr_slider(brake_frame, row_idx, "Min Frequency:", self.brake_min_frequency, 1, 50, "%d", " Hz")
-        row_idx += 1
-        self._create_rbr_slider(brake_frame, row_idx, "Max Frequency:", self.brake_max_frequency, 20, 150, "%d", " Hz")
+        self._create_rbr_slider(brake_frame, row_idx, "Max Frequency:", self.brake_max_frequency, 20, 150, "%d", " Hz",
+                                tooltip="扳机震动最高频率 (20-150 Hz)\n严重抱死时的震动频率\n• 建议设置为Min Frequency的2-4倍\n• 频率会根据抱死程度动态变化\n当前默认: 70 Hz")
         row_idx += 1
         
         # 反转频率模式复选框
         brake_reverse_checkbox = ttk.Checkbutton(
             brake_frame,
-            text="反转频率模式 (轻微滑移→高频, 严重滑移→低频)",
+            text="反转频率",
             variable=self.brake_reverse_frequency_mode,
             command=lambda: self.update_new_parameters(self.brake_reverse_frequency_mode, "%d", "", None),
             style='Theme.TCheckbutton'
         )
         brake_reverse_checkbox.grid(row=row_idx, column=0, sticky="w", pady=(10, 5))
+        ToolTip(brake_reverse_checkbox, "反转震动频率映射关系\n默认(不勾选): 轻微抱死→低频, 严重抱死→高频\n勾选后: 轻微抱死→高频, 严重抱死→低频")
+        row_idx += 1
+        
+        # AutomaticGun模式复选框
+        brake_automatic_gun_checkbox = ttk.Checkbutton(
+            brake_frame,
+            text="AutomaticGun",
+            variable=self.brake_use_automatic_gun,
+            command=lambda: self.update_new_parameters(self.brake_use_automatic_gun, "%d", "", None),
+            style='Theme.TCheckbutton'
+        )
+        brake_automatic_gun_checkbox.grid(row=row_idx, column=0, sticky="w", pady=(5, 5))
+        ToolTip(brake_automatic_gun_checkbox, "切换扳机震动模式\n• Vibration (mode=23): 连续震动模式,震感更流畅\n• AutomaticGun (mode=17): 机枪模式,震感更有颗粒感\n两种模式都受Amplitude和Frequency参数影响")
         
         # === Throttle Slip 标签页 ===
         throttle_frame = ttk.Frame(notebook, style='Theme.TFrame', padding=10)
@@ -1195,30 +1261,47 @@ class TelemetryDashboard:
         throttle_frame.grid_columnconfigure(0, weight=1)  # 让滑杆可以充分扩展
         
         row_idx = 0
-        self._create_rbr_slider(throttle_frame, row_idx, "Throttle Threshold:", self.throttle_threshold, 0.1, 99.0, "%.1f", "%")
+        self._create_rbr_slider(throttle_frame, row_idx, "Throttle Threshold:", self.throttle_threshold, 0.1, 99.0, "%.1f", "%",
+                                tooltip="油门踏板触发阈值\n只有当油门超过此百分比时才会检测车轮打滑\n推荐: 3-50% (默认3%)")
         row_idx += 1
-        self._create_rbr_slider(throttle_frame, row_idx, "Front Slip Threshold:", self.throttle_front_slip_threshold, 1.0, 20.0, "%.1f", "")
+        self._create_rbr_slider(throttle_frame, row_idx, "Front Slip Threshold:", self.throttle_front_slip_threshold, 1.0, 20.0, "%.1f", "",
+                                tooltip="前轮打滑触发阈值 (单位: %)\n前轮滑移率超过此值时触发扳机震动\n• 3-5%: 极敏感,适合湿滑/雪地\n• 7-10%: 平衡设置,推荐日常拉力\n• 15-20%: 允许打滑,适合漂移风格\n当前默认: 7%")
         row_idx += 1
-        self._create_rbr_slider(throttle_frame, row_idx, "Rear Slip Threshold:", self.throttle_rear_slip_threshold, 1.0, 20.0, "%.1f", "")
+        self._create_rbr_slider(throttle_frame, row_idx, "Rear Slip Threshold:", self.throttle_rear_slip_threshold, 1.0, 20.0, "%.1f", "",
+                                tooltip="后轮打滑触发阈值 (单位: %)\n后轮滑移率超过此值时触发扳机震动\n• 后驱车最常出现后轮打滑\n• 设置越低越敏感\n当前默认: 7%")
         row_idx += 1
-        self._create_rbr_slider(throttle_frame, row_idx, "Feedback Strength:", self.throttle_feedback_strength, 1, 8, "%d", "")
+        self._create_rbr_slider(throttle_frame, row_idx, "Amplitude:", self.throttle_amplitude, 1, 8, "%d", "",
+                                tooltip="扳机震动强度 (1-8级)\n控制扳机震动的振幅大小\n• 1-3: 轻柔震动\n• 4-6: 中等震动 (推荐)\n• 7-8: 强烈震动\n当前默认: 6")
         row_idx += 1
-        self._create_rbr_slider(throttle_frame, row_idx, "Amplitude:", self.throttle_amplitude, 1, 8, "%d", "")
+        self._create_rbr_slider(throttle_frame, row_idx, "Min Frequency:", self.throttle_min_frequency, 1, 50, "%d", " Hz",
+                                tooltip="扳机震动最低频率 (1-50 Hz)\n轻微打滑时的震动频率\n• 1-10 Hz: 低沉震动\n• 10-30 Hz: 中频震动 (推荐)\n• 30-50 Hz: 高频震动\n当前默认: 20 Hz")
         row_idx += 1
-        self._create_rbr_slider(throttle_frame, row_idx, "Min Frequency:", self.throttle_min_frequency, 1, 50, "%d", " Hz")
-        row_idx += 1
-        self._create_rbr_slider(throttle_frame, row_idx, "Max Frequency:", self.throttle_max_frequency, 20, 150, "%d", " Hz")
+        self._create_rbr_slider(throttle_frame, row_idx, "Max Frequency:", self.throttle_max_frequency, 20, 150, "%d", " Hz",
+                                tooltip="扳机震动最高频率 (20-150 Hz)\n严重打滑时的震动频率\n• 建议设置为Min Frequency的2-4倍\n• 频率会根据打滑程度动态变化\n当前默认: 70 Hz")
         row_idx += 1
         
         # 反转频率模式复选框
         throttle_reverse_checkbox = ttk.Checkbutton(
             throttle_frame,
-            text="反转频率模式 (轻微滑移→高频, 严重滑移→低频)",
+            text="反转频率",
             variable=self.throttle_reverse_frequency_mode,
             command=lambda: self.update_new_parameters(self.throttle_reverse_frequency_mode, "%d", "", None),
             style='Theme.TCheckbutton'
         )
         throttle_reverse_checkbox.grid(row=row_idx, column=0, sticky="w", pady=(10, 5))
+        ToolTip(throttle_reverse_checkbox, "反转震动频率映射关系\n默认(不勾选): 轻微打滑→低频, 严重打滑→高频\n勾选后: 轻微打滑→高频, 严重打滑→低频")
+        row_idx += 1
+        
+        # AutomaticGun模式复选框
+        throttle_automatic_gun_checkbox = ttk.Checkbutton(
+            throttle_frame,
+            text="AutomaticGun",
+            variable=self.throttle_use_automatic_gun,
+            command=lambda: self.update_new_parameters(self.throttle_use_automatic_gun, "%d", "", None),
+            style='Theme.TCheckbutton'
+        )
+        throttle_automatic_gun_checkbox.grid(row=row_idx, column=0, sticky="w", pady=(5, 5))
+        ToolTip(throttle_automatic_gun_checkbox, "切换扳机震动模式\n• Vibration (mode=23): 连续震动模式,震感更流畅\n• AutomaticGun (mode=17): 机枪模式,震感更有颗粒感\n两种模式都受Amplitude和Frequency参数影响")
         
         # === Haptic 标签页 (手柄震动参数) ===
         haptic_tab_frame = ttk.Frame(notebook, style='Theme.TFrame', padding=10)
@@ -1239,7 +1322,10 @@ class TelemetryDashboard:
         haptic_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=2)
         haptic_frame.grid_columnconfigure(1, weight=1)
         
-        ttk.Label(haptic_frame, text="Vibration Strength:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
+        haptic_label = ttk.Label(haptic_frame, text="Vibration Strength:", style='Theme.TLabel', width=20, anchor="e")
+        haptic_label.grid(row=0, column=0, padx=(0,5))
+        ToolTip(haptic_label, "手柄整体震动强度 (0.0-1.0)\n控制手柄震动马达的强度\n• 0.0: 关闭震动\n• 0.5: 中等强度 (推荐)\n• 1.0: 最大强度\n震动会在轮胎打滑/抱死时触发")
+        
         haptic_scale = ttk.Scale(
             haptic_frame,
             from_=0,
@@ -1251,6 +1337,8 @@ class TelemetryDashboard:
             length=400  # 增加滑杆长度
         )
         haptic_scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
+        ToolTip(haptic_scale, "手柄整体震动强度 (0.0-1.0)\n控制手柄震动马达的强度\n• 0.0: 关闭震动\n• 0.5: 中等强度 (推荐)\n• 1.0: 最大强度\n震动会在轮胎打滑/抱死时触发")
+        
         self.haptic_value_label = ttk.Label(haptic_frame, text=f"{self.haptic_strength.get():.2f}", style='Theme.TLabel', width=8, anchor="e")
         self.haptic_value_label.grid(row=0, column=2)
         
@@ -1259,7 +1347,10 @@ class TelemetryDashboard:
         slip_frame.grid(row=2, column=0, sticky="ew", padx=5, pady=2)
         slip_frame.grid_columnconfigure(1, weight=1)
         
-        ttk.Label(slip_frame, text="Slip Threshold:", style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
+        slip_label = ttk.Label(slip_frame, text="Slip Threshold:", style='Theme.TLabel', width=20, anchor="e")
+        slip_label.grid(row=0, column=0, padx=(0,5))
+        ToolTip(slip_label, "手柄震动触发阈值 (单位: %)\n轮胎滑移率超过此值时触发手柄震动\n• 5-10%: 敏感,轻微打滑即震动\n• 10-20%: 平衡设置 (推荐)\n• 20-30%: 只在严重打滑时震动\n注: 此参数独立于扳机Slip Threshold")
+        
         slip_scale = ttk.Scale(
             slip_frame,
             from_=5.0,
@@ -1271,6 +1362,8 @@ class TelemetryDashboard:
             length=400  # 增加滑杆长度
         )
         slip_scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
+        ToolTip(slip_scale, "手柄震动触发阈值 (单位: %)\n轮胎滑移率超过此值时触发手柄震动\n• 5-10%: 敏感,轻微打滑即震动\n• 10-20%: 平衡设置 (推荐)\n• 20-30%: 只在严重打滑时震动\n注: 此参数独立于扳机Slip Threshold")
+        
         self.slip_value_label = ttk.Label(slip_frame, text=f"{self.wheel_slip_threshold.get():.1f}", style='Theme.TLabel', width=8, anchor="e")
         self.slip_value_label.grid(row=0, column=2)
         
@@ -1332,13 +1425,18 @@ class TelemetryDashboard:
         config['GUI']['fps'] = f"{fps:.1f}"
         self.save_config()
     
-    def _create_rbr_slider(self, parent, row, label_text, variable, from_, to, format_str, unit):
+    def _create_rbr_slider(self, parent, row, label_text, variable, from_, to, format_str, unit, tooltip=None):
         """创建参数滑块的辅助方法"""
         frame = ttk.Frame(parent, style='Theme.TFrame')
         frame.grid(row=row, column=0, sticky="ew", padx=5, pady=2)
         frame.grid_columnconfigure(1, weight=1)
         
-        ttk.Label(frame, text=label_text, style='Theme.TLabel', width=20, anchor="e").grid(row=0, column=0, padx=(0,5))
+        label = ttk.Label(frame, text=label_text, style='Theme.TLabel', width=20, anchor="e")
+        label.grid(row=0, column=0, padx=(0,5))
+        
+        # 添加tooltip到标签
+        if tooltip:
+            ToolTip(label, tooltip)
         
         scale = ttk.Scale(
             frame,
@@ -1351,6 +1449,10 @@ class TelemetryDashboard:
             length=400  # 增加滑杆长度以便微调参数
         )
         scale.grid(row=0, column=1, sticky="ew", padx=(0,5))
+        
+        # 添加tooltip到滑杆
+        if tooltip:
+            ToolTip(scale, tooltip)
         
         value_label = ttk.Label(frame, text=(format_str % variable.get()) + unit, style='Theme.TLabel', width=8, anchor="e")
         value_label.grid(row=0, column=2)
@@ -1397,9 +1499,9 @@ class TelemetryDashboard:
     def update_new_parameters(self, variable, format_str, unit, label):
         """更新新的Brake/Throttle Slip参数"""
         global brake_threshold, brake_front_slip_threshold, brake_rear_slip_threshold
-        global brake_feedback_strength, brake_amplitude, brake_min_frequency, brake_max_frequency, brake_reverse_frequency_mode
+        global brake_feedback_strength, brake_amplitude, brake_min_frequency, brake_max_frequency, brake_reverse_frequency_mode, brake_use_automatic_gun
         global throttle_threshold, throttle_front_slip_threshold, throttle_rear_slip_threshold
-        global throttle_feedback_strength, throttle_amplitude, throttle_min_frequency, throttle_max_frequency, throttle_reverse_frequency_mode
+        global throttle_feedback_strength, throttle_amplitude, throttle_min_frequency, throttle_max_frequency, throttle_reverse_frequency_mode, throttle_use_automatic_gun
         
         # 更新全局变量
         brake_threshold = self.brake_threshold.get()
@@ -1410,6 +1512,7 @@ class TelemetryDashboard:
         brake_min_frequency = self.brake_min_frequency.get()
         brake_max_frequency = self.brake_max_frequency.get()
         brake_reverse_frequency_mode = self.brake_reverse_frequency_mode.get()
+        brake_use_automatic_gun = self.brake_use_automatic_gun.get()
         
         throttle_threshold = self.throttle_threshold.get()
         throttle_front_slip_threshold = self.throttle_front_slip_threshold.get()
@@ -1419,6 +1522,7 @@ class TelemetryDashboard:
         throttle_min_frequency = self.throttle_min_frequency.get()
         throttle_max_frequency = self.throttle_max_frequency.get()
         throttle_reverse_frequency_mode = self.throttle_reverse_frequency_mode.get()
+        throttle_use_automatic_gun = self.throttle_use_automatic_gun.get()
         
         # 更新传入的标签显示
         if label is not None:  # 允许label为None（用于复选框）
@@ -1434,7 +1538,8 @@ class TelemetryDashboard:
             'amplitude': str(brake_amplitude),
             'min_frequency': str(brake_min_frequency),
             'max_frequency': str(brake_max_frequency),
-            'reverse_frequency_mode': str(brake_reverse_frequency_mode)
+            'reverse_frequency_mode': str(brake_reverse_frequency_mode),
+            'use_automatic_gun': str(brake_use_automatic_gun)
         }
         
         config['ThrottleSlip'] = {
@@ -1445,7 +1550,8 @@ class TelemetryDashboard:
             'amplitude': str(throttle_amplitude),
             'min_frequency': str(throttle_min_frequency),
             'max_frequency': str(throttle_max_frequency),
-            'reverse_frequency_mode': str(throttle_reverse_frequency_mode)
+            'reverse_frequency_mode': str(throttle_reverse_frequency_mode),
+            'use_automatic_gun': str(throttle_use_automatic_gun)
         }
         
         self.save_config()
@@ -2418,6 +2524,7 @@ brake_amplitude = config.getint('BrakeSlip', 'amplitude', fallback=6)
 brake_min_frequency = config.getint('BrakeSlip', 'min_frequency', fallback=20)
 brake_max_frequency = config.getint('BrakeSlip', 'max_frequency', fallback=70)
 brake_reverse_frequency_mode = config.getboolean('BrakeSlip', 'reverse_frequency_mode', fallback=False)
+brake_use_automatic_gun = config.getboolean('BrakeSlip', 'use_automatic_gun', fallback=False)
 
 # 油门滑移参数（ThrottleSlip）
 throttle_threshold = config.getfloat('ThrottleSlip', 'throttle_threshold', fallback=3.0)
@@ -2428,6 +2535,7 @@ throttle_amplitude = config.getint('ThrottleSlip', 'amplitude', fallback=6)
 throttle_min_frequency = config.getint('ThrottleSlip', 'min_frequency', fallback=20)
 throttle_max_frequency = config.getint('ThrottleSlip', 'max_frequency', fallback=70)
 throttle_reverse_frequency_mode = config.getboolean('ThrottleSlip', 'reverse_frequency_mode', fallback=False)
+throttle_use_automatic_gun = config.getboolean('ThrottleSlip', 'use_automatic_gun', fallback=False)
 
 # 确保新参数值在合理范围内
 brake_threshold = max(0.1, min(99.0, brake_threshold))
@@ -2530,9 +2638,9 @@ def reload_config_if_changed():
     global adaptive_trigger_enabled, led_effect_enabled, haptic_effect_enabled, print_telemetry_enabled
     global trigger_strength, haptic_strength, wheel_slip_threshold
     global brake_threshold, brake_front_slip_threshold, brake_rear_slip_threshold
-    global brake_feedback_strength, brake_amplitude, brake_min_frequency, brake_max_frequency
+    global brake_feedback_strength, brake_amplitude, brake_min_frequency, brake_max_frequency, brake_reverse_frequency_mode, brake_use_automatic_gun
     global throttle_threshold, throttle_front_slip_threshold, throttle_rear_slip_threshold
-    global throttle_feedback_strength, throttle_amplitude, throttle_min_frequency, throttle_max_frequency
+    global throttle_feedback_strength, throttle_amplitude, throttle_min_frequency, throttle_max_frequency, throttle_reverse_frequency_mode, throttle_use_automatic_gun
     global auto_gear_shift_enabled, gear_shift_presets, active_gear_preset
     global shift_up_rpm, shift_down_rpm, shift_up_cooldown, shift_down_cooldown, gear_shift_debug
     global last_config_mtime
@@ -3136,16 +3244,6 @@ while True:
                     percentage = max(0.0, min(1.0, percentage))
                     
                     if percentage >= 0.01:  # 最小触发阈值（降低以支持更低频率震动）
-                        # 1) FEEDBACK 模式 - 提供阻力感
-                        feedback_str = int(brake_feedback_strength * percentage)
-                        feedback_str = max(1, min(8, feedback_str))
-                        
-                        packet.instructions.append(
-                            Instruction(InstructionType.TriggerUpdate, 
-                                       [0, Trigger.Left, 21, 1, feedback_str, 0])  # mode=21=FEEDBACK
-                        )
-                        
-                        # 2) VIBRATION 模式 - 提供震动反馈
                         # 根据反转频率模式计算频率
                         if brake_reverse_frequency_mode:
                             # 反转模式：轻微滑移→高频，严重滑移→低频
@@ -3155,10 +3253,19 @@ while True:
                             freq = int(brake_min_frequency + (brake_max_frequency - brake_min_frequency) * percentage)
                         freq = max(brake_min_frequency, min(brake_max_frequency, freq))
                         
-                        packet.instructions.append(
-                            Instruction(InstructionType.TriggerUpdate,
-                                       [0, Trigger.Left, 23, 0, brake_amplitude, freq])  # mode=23=VIBRATION
-                        )
+                        # 根据用户选择使用不同的扳机模式
+                        if brake_use_automatic_gun:
+                            # AutomaticGun 模式 (mode=17)
+                            packet.instructions.append(
+                                Instruction(InstructionType.TriggerUpdate,
+                                           [0, Trigger.Left, TriggerMode.AutomaticGun, 0, brake_amplitude, freq])
+                            )
+                        else:
+                            # VIBRATION 模式 (mode=23)
+                            packet.instructions.append(
+                                Instruction(InstructionType.TriggerUpdate,
+                                           [0, Trigger.Left, 23, 0, brake_amplitude, freq])
+                            )
             
             # === 油门滑移反馈 (右扳机 R2) ===
             # 油门打滑：车轮转速 > 车速，滑移率为正
@@ -3179,16 +3286,6 @@ while True:
                     percentage = max(0.0, min(1.0, percentage))
                     
                     if percentage >= 0.01:  # 最小触发阈值（降低以支持更低频率震动）
-                        # 1) FEEDBACK 模式 - 提供阻力感
-                        feedback_str = int(throttle_feedback_strength * percentage)
-                        feedback_str = max(1, min(8, feedback_str))
-                        
-                        packet.instructions.append(
-                            Instruction(InstructionType.TriggerUpdate,
-                                       [0, Trigger.Right, 21, 1, feedback_str, 0])  # mode=21=FEEDBACK
-                        )
-                        
-                        # 2) VIBRATION 模式 - 提供震动反馈
                         # 根据反转频率模式计算频率
                         if throttle_reverse_frequency_mode:
                             # 反转模式：轻微滑移→高频，严重滑移→低频
@@ -3198,10 +3295,19 @@ while True:
                             freq = int(throttle_min_frequency + (throttle_max_frequency - throttle_min_frequency) * percentage)
                         freq = max(throttle_min_frequency, min(throttle_max_frequency, freq))
                         
-                        packet.instructions.append(
-                            Instruction(InstructionType.TriggerUpdate,
-                                       [0, Trigger.Right, 23, 0, throttle_amplitude, freq])  # mode=23=VIBRATION
-                        )
+                        # 根据用户选择使用不同的扳机模式
+                        if throttle_use_automatic_gun:
+                            # AutomaticGun 模式 (mode=17)
+                            packet.instructions.append(
+                                Instruction(InstructionType.TriggerUpdate,
+                                           [0, Trigger.Right, TriggerMode.AutomaticGun, 0, throttle_amplitude, freq])
+                            )
+                        else:
+                            # VIBRATION 模式 (mode=23)
+                            packet.instructions.append(
+                                Instruction(InstructionType.TriggerUpdate,
+                                           [0, Trigger.Right, 23, 0, throttle_amplitude, freq])
+                            )
         
         # 如果没有触发任何效果，恢复正常模式
         if not packet.instructions:
