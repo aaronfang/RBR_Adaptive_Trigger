@@ -3039,15 +3039,18 @@ while True:
                 # 检查是否在倒计时结束后的宽限期内
                 in_countdown_grace_period = countdown_just_ended and (current_time - countdown_end_time) <= COUNTDOWN_END_GRACE_PERIOD
                 
+                in_forward_or_neutral = 0 <= gear_id <= 6
+                not_reversing = car_speed >= 0
+                
+                # 提前计算游戏状态,用于调试和换档判断
+                game_has_focus = WINDOWS_API_AVAILABLE and is_game_window_focused()
+                game_not_paused = (current_time - last_valid_telemetry_time) <= telemetry_timeout
+                
                 # 起步辅助期间的前置条件调试
                 if in_countdown_grace_period and gear_id == 0:
                     print(f"[起步辅助] 宽限期中: rpm={rpm:.0f} auto_enabled={auto_gear_shift_enabled} countdown={stage_start_countdown:.2f} pydirect={PYDIRECTINPUT_AVAILABLE} focus={game_has_focus} paused={not game_not_paused} clutch={clutch:.0f}%")
                 
-                in_forward_or_neutral = 0 <= gear_id <= 6
-                not_reversing = car_speed >= 0
                 if auto_gear_shift_enabled and in_forward_or_neutral and not_reversing and stage_start_countdown <= 0:
-                    game_has_focus = WINDOWS_API_AVAILABLE and is_game_window_focused()
-                    game_not_paused = (current_time - last_valid_telemetry_time) <= telemetry_timeout
                     
                     # Debug: print status every 2 seconds when in race
                     if gear_shift_debug and (current_time - last_gear_shift_debug_time) >= 2.0:
