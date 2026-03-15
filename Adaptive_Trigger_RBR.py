@@ -2801,7 +2801,6 @@ previous_gear = None
 last_shift_up_time = 0
 last_shift_down_time = 0
 last_gear_shift_debug_time = 0
-last_grace_period_debug_time = 0  # 起步辅助调试计时器
 
 # Auto gear shift: 起步辅助 - 记录上一次倒计时状态
 previous_stage_countdown = 0
@@ -2980,7 +2979,6 @@ while True:
                         # 重置换档冷却时间,避免起步时被冷却阻挡
                         last_shift_up_time = 0
                         last_shift_down_time = 0
-                        print(f"[起步辅助] 倒计时结束! 当前档位={gear_id} rpm={rpm:.0f} 启动1.5秒宽限期(rpm>=800即可挂1档)")
                     previous_stage_countdown = stage_start_countdown
                     split1_done = rbr_memory_reader.read_int(num + 0x254) >= 1
                     split2_done = rbr_memory_reader.read_int(num + 0x254) >= 2
@@ -3048,10 +3046,6 @@ while True:
                 game_has_focus = WINDOWS_API_AVAILABLE and is_game_window_focused()
                 game_not_paused = (current_time - last_valid_telemetry_time) <= telemetry_timeout
                 
-                # 起步辅助期间的前置条件调试
-                if in_countdown_grace_period and gear_id == 0:
-                    print(f"[起步辅助] 宽限期中: rpm={rpm:.0f} speed={car_speed:.2f} auto_enabled={auto_gear_shift_enabled} countdown={stage_start_countdown:.2f} pydirect={PYDIRECTINPUT_AVAILABLE} focus={game_has_focus} paused={not game_not_paused} clutch={clutch:.0f}%")
-                
                 if auto_gear_shift_enabled and in_forward_or_neutral and not_reversing and stage_start_countdown <= 0:
                     
                     # Debug: print status every 2 seconds when in race
@@ -3092,12 +3086,6 @@ while True:
                         # 起步辅助: 倒计时结束后1.5秒内,降低rpm要求到800,帮助上坡/低转速起步
                         n_to_1_rpm_threshold = 800 if in_countdown_grace_period else 1500
                         
-                        # 强制调试: 在宽限期内且在空档时,每0.5秒打印一次状态
-                        if in_countdown_grace_period and gear_id == 0 and (current_time - last_grace_period_debug_time) >= 0.5:
-                            last_grace_period_debug_time = current_time
-                            cooldown_remaining = shift_up_cooldown - (current_time - last_shift_up_time)
-                            print(f"[起步辅助DEBUG] gear=N rpm={rpm:.0f} 阈值={n_to_1_rpm_threshold} 冷却={cooldown_remaining:.2f}s")
-                        
                         if (gear_id == 0 and rpm >= n_to_1_rpm_threshold and
                             (current_time - last_shift_up_time) >= shift_up_cooldown):
                             try:
@@ -3106,9 +3094,6 @@ while True:
                                 # 挂上1档后,清除宽限期标志,避免立即跳2档
                                 if in_countdown_grace_period:
                                     countdown_just_ended = False
-                                    print(f"[起步辅助] 成功! N->1 at {rpm:.0f}rpm (阈值{n_to_1_rpm_threshold})")
-                                else:
-                                    print(f"[AutoGear] N->1 at {rpm:.0f}rpm")
                             except Exception as e:
                                 print(f"Auto gear shift up error: {e}")
                         # Shift up: gear_id 1-5 可升档 (1->2, 2->3, ...)
