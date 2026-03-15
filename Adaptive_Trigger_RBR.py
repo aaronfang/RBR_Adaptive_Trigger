@@ -2802,6 +2802,12 @@ last_shift_up_time = 0
 last_shift_down_time = 0
 last_gear_shift_debug_time = 0
 
+# Auto gear shift: 起步辅助 - 记录上一次倒计时状态
+previous_stage_countdown = 0
+countdown_just_ended = False
+countdown_end_time = 0
+COUNTDOWN_END_GRACE_PERIOD = 1.5  # 倒计时结束后的宽限期(秒),在此期间降低N->1的rpm要求
+
 # Add these new functions and variables
 
 best_records = {}
@@ -2965,6 +2971,12 @@ while True:
                     gear_id = rbr_memory_reader.read_int(num + 0x170) - 1  # Adjust gear value
                     stage_start_countdown = rbr_memory_reader.read_float(num + 0x244)
                     false_start = rbr_memory_reader.read_int(num + 0x248) == 1
+                    
+                    # 检测倒计时是否刚结束(从>0变为<=0)
+                    if previous_stage_countdown > 0 and stage_start_countdown <= 0:
+                        countdown_just_ended = True
+                        countdown_end_time = current_time
+                    previous_stage_countdown = stage_start_countdown
                     split1_done = rbr_memory_reader.read_int(num + 0x254) >= 1
                     split2_done = rbr_memory_reader.read_int(num + 0x254) >= 2
                     split1_time = rbr_memory_reader.read_float(num + 0x258)
@@ -3018,6 +3030,10 @@ while True:
                 # gear_id: -1=倒档, 0=空档, 1-6=前进档。car_speed<0 表示倒车，绝不换挡
                 # 降档时禁止从1档降到空档，避免比赛过程中误入空档
                 # 0=空档也参与，支持静止时 N->1 自动挂1档
+                
+                # 检查是否在倒计时结束后的宽限期内
+                in_countdown_grace_period = countdown_just_ended and (current_time - countdown_end_time) <= COUNTDOWN_END_GRACE_PERIOD
+                
                 in_forward_or_neutral = 0 <= gear_id <= 6
                 not_reversing = car_speed >= 0
                 if auto_gear_shift_enabled and in_forward_or_neutral and not_reversing and stage_start_countdown <= 0:
@@ -3036,10 +3052,11 @@ while True:
                             reasons.append("游戏已暂停")
                         elif clutch >= 20:
                             reasons.append(f"离合踩下{clutch:.0f}%")
-                        elif gear_id == 0 and rpm >= 1500 and (current_time - last_shift_up_time) < shift_up_cooldown:
+                        elif gear_id == 0 and rpm >= (800 if in_countdown_grace_period else 1500) and (current_time - last_shift_up_time) < shift_up_cooldown:
                             reasons.append("N->1冷却中")
-                        elif gear_id == 0 and rpm >= 1500:
-                            reasons.append("应N->1")
+                        elif gear_id == 0 and rpm >= (800 if in_countdown_grace_period else 1500):
+                            grace_hint = "(起步辅助)" if in_countdown_grace_period else ""
+                            reasons.append(f"应N->1{grace_hint}")
                         elif gear_id >= 1 and gear_id < len(shift_up_rpm) and rpm >= shift_up_rpm[gear_id] and (current_time - last_shift_up_time) < shift_up_cooldown:
                             reasons.append("升档冷却中")
                         elif gear_id > 1 and gear_id <= len(shift_down_rpm) and rpm <= shift_down_rpm[gear_id - 1] and (current_time - last_shift_down_time) < shift_down_cooldown:
@@ -3049,7 +3066,8 @@ while True:
                         elif gear_id > 1 and gear_id <= len(shift_down_rpm) and rpm <= shift_down_rpm[gear_id - 1]:
                             reasons.append("应降档")
                         else:
-                            n1 = "N->1>=1500" if gear_id == 0 else ""
+                            n1_threshold = 800 if in_countdown_grace_period else 1500
+                            n1 = f"N->1>={n1_threshold}" if gear_id == 0 else ""
                             up_r = shift_up_rpm[gear_id] if gear_id >= 1 and gear_id < len(shift_up_rpm) else 0
                             down_r = shift_down_rpm[gear_id - 1] if gear_id > 1 and gear_id <= len(shift_down_rpm) else 0
                             reasons.append(f"rpm={rpm:.0f} gear={gear_id} {n1} (升档>={up_r}, 降档<={down_r})")
@@ -3057,11 +3075,18 @@ while True:
                     
                     if PYDIRECTINPUT_AVAILABLE and game_has_focus and game_not_paused and clutch < 20:
                         # N->1: 空档时转速>1500自动挂1档（静止起步）
-                        if (gear_id == 0 and rpm >= 1500 and
+                        # 起步辅助: 倒计时结束后1.5秒内,降低rpm要求到800,帮助上坡/低转速起步
+                        n_to_1_rpm_threshold = 800 if in_countdown_grace_period else 1500
+                        
+                        if (gear_id == 0 and rpm >= n_to_1_rpm_threshold and
                             (current_time - last_shift_up_time) >= shift_up_cooldown):
                             try:
                                 pydirectinput.press(gear_up_key)
                                 last_shift_up_time = current_time
+                                # 挂上1档后,清除宽限期标志,避免立即跳2档
+                                if in_countdown_grace_period:
+                                    countdown_just_ended = False
+                                    print(f"[AutoGear] 起步辅助: N->1 at {rpm:.0f}rpm (阈值{n_to_1_rpm_threshold})")
                             except Exception as e:
                                 print(f"Auto gear shift up error: {e}")
                         # Shift up: gear_id 1-5 可升档 (1->2, 2->3, ...)
