@@ -3040,7 +3040,9 @@ while True:
                 in_countdown_grace_period = countdown_just_ended and (current_time - countdown_end_time) <= COUNTDOWN_END_GRACE_PERIOD
                 
                 in_forward_or_neutral = 0 <= gear_id <= 6
-                not_reversing = car_speed >= 0
+                # 起步辅助期间:忽略倒车检测,因为起步时speed可能读取到轻微负值(后溜/读取误差)
+                # 正常行驶时:严格检查倒车状态,避免倒车时误换档
+                not_reversing = car_speed >= 0 if not in_countdown_grace_period else True
                 
                 # 提前计算游戏状态,用于调试和换档判断
                 game_has_focus = WINDOWS_API_AVAILABLE and is_game_window_focused()
@@ -3048,14 +3050,9 @@ while True:
                 
                 # 起步辅助期间的前置条件调试
                 if in_countdown_grace_period and gear_id == 0:
-                    print(f"[起步辅助] 宽限期中: rpm={rpm:.0f} auto_enabled={auto_gear_shift_enabled} countdown={stage_start_countdown:.2f} pydirect={PYDIRECTINPUT_AVAILABLE} focus={game_has_focus} paused={not game_not_paused} clutch={clutch:.0f}%")
-                    # 详细打印换档if的每个条件
-                    print(f"[起步辅助] 条件检查: auto={auto_gear_shift_enabled} forward={in_forward_or_neutral} not_rev={not_reversing} speed={car_speed:.2f} countdown_ok={stage_start_countdown <= 0} countdown={stage_start_countdown}")
+                    print(f"[起步辅助] 宽限期中: rpm={rpm:.0f} speed={car_speed:.2f} auto_enabled={auto_gear_shift_enabled} countdown={stage_start_countdown:.2f} pydirect={PYDIRECTINPUT_AVAILABLE} focus={game_has_focus} paused={not game_not_paused} clutch={clutch:.0f}%")
                 
                 if auto_gear_shift_enabled and in_forward_or_neutral and not_reversing and stage_start_countdown <= 0:
-                    # 起步辅助期间额外调试:确认进入自动换档逻辑
-                    if in_countdown_grace_period and gear_id == 0 and (current_time - last_grace_period_debug_time) >= 0.5:
-                        print(f"[起步辅助] 已进入换档逻辑! PYDIRECT={PYDIRECTINPUT_AVAILABLE} focus={game_has_focus} paused={not game_not_paused} clutch={clutch:.0f}%")
                     
                     # Debug: print status every 2 seconds when in race
                     if gear_shift_debug and (current_time - last_gear_shift_debug_time) >= 2.0:
@@ -3099,8 +3096,7 @@ while True:
                         if in_countdown_grace_period and gear_id == 0 and (current_time - last_grace_period_debug_time) >= 0.5:
                             last_grace_period_debug_time = current_time
                             cooldown_remaining = shift_up_cooldown - (current_time - last_shift_up_time)
-                            can_shift = rpm >= n_to_1_rpm_threshold and (current_time - last_shift_up_time) >= shift_up_cooldown
-                            print(f"[起步辅助DEBUG] gear=N rpm={rpm:.0f} 阈值={n_to_1_rpm_threshold} 冷却={cooldown_remaining:.2f}s 可换档={can_shift}")
+                            print(f"[起步辅助DEBUG] gear=N rpm={rpm:.0f} 阈值={n_to_1_rpm_threshold} 冷却={cooldown_remaining:.2f}s")
                         
                         if (gear_id == 0 and rpm >= n_to_1_rpm_threshold and
                             (current_time - last_shift_up_time) >= shift_up_cooldown):
