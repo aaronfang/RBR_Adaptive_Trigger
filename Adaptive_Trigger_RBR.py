@@ -3051,6 +3051,9 @@ while True:
                     print(f"[起步辅助] 宽限期中: rpm={rpm:.0f} auto_enabled={auto_gear_shift_enabled} countdown={stage_start_countdown:.2f} pydirect={PYDIRECTINPUT_AVAILABLE} focus={game_has_focus} paused={not game_not_paused} clutch={clutch:.0f}%")
                 
                 if auto_gear_shift_enabled and in_forward_or_neutral and not_reversing and stage_start_countdown <= 0:
+                    # 起步辅助期间额外调试:确认进入自动换档逻辑
+                    if in_countdown_grace_period and gear_id == 0 and (current_time - last_grace_period_debug_time) >= 0.5:
+                        print(f"[起步辅助] 已进入换档逻辑! PYDIRECT={PYDIRECTINPUT_AVAILABLE} focus={game_has_focus} paused={not game_not_paused} clutch={clutch:.0f}%")
                     
                     # Debug: print status every 2 seconds when in race
                     if gear_shift_debug and (current_time - last_gear_shift_debug_time) >= 2.0:
